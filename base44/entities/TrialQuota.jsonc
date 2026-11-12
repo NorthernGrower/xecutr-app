@@ -1,0 +1,44 @@
+{
+  "name": "TrialQuota",
+  "type": "object",
+  "properties": {
+    "day": {
+      "type": "string",
+      "description": "UTC day the count belongs to (YYYY-MM-DD)"
+    },
+    "ip_hash": {
+      "type": "string",
+      "description": "Truncated hash of the caller's address plus the day \u2014 the address itself is never stored"
+    },
+    "count": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "day",
+    "ip_hash"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
