@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { githubAccount, pushProjectToGitHub } from "@/lib/github-fns";
 import { readGitHubToken, saveGitHubToken } from "@/lib/providers";
+import { GITHUB_TOKEN_URL } from "@/components/workspace/GitHubConnectionCard";
 
 /** Save the project's existing files into a repo on the user's own GitHub. */
 export default function GitHubDialog({ open, onOpenChange, project, onSaved }) {
@@ -85,6 +86,14 @@ export default function GitHubDialog({ open, onOpenChange, project, onSaved }) {
             <p className="mt-1.5 font-body text-[11px] leading-relaxed text-muted-foreground">
               Stored in this browser only, sent with this request and never kept on the server.
             </p>
+            <a
+              href={GITHUB_TOKEN_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1.5 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de] underline"
+            >
+              create a token with repo scope
+            </a>
           </div>
 
           {account ? (
@@ -92,6 +101,19 @@ export default function GitHubDialog({ open, onOpenChange, project, onSaved }) {
               <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de]">
                 connected as {account.login}
               </p>
+              {project?.repo_url && (
+                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                  saved to{" "}
+                  <a
+                    href={project.repo_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[#e0f7ff] underline"
+                  >
+                    {project.repo_full_name}
+                  </a>
+                </p>
+              )}
               <input
                 value={repo}
                 onChange={(e) => setRepo(e.target.value)}

@@ -28,6 +28,14 @@
     },
     "last_activity": {
       "type": "string"
+    },
+    "repo_full_name": {
+      "type": "string",
+      "description": "owner/repo this project was last saved to"
+    },
+    "repo_url": {
+      "type": "string",
+      "description": "Link to the project's GitHub repository"
     }
   },
   "required": [

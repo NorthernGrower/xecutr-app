@@ -4,15 +4,13 @@ import { Check, ExternalLink, Loader2 } from "lucide-react";
 import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
 import Panel from "@/components/workspace/Panel";
 import { discoverModels } from "@/lib/chat";
-import { githubAccount } from "@/lib/github-fns";
+import GitHubConnectionCard from "@/components/workspace/GitHubConnectionCard";
 import {
   PROVIDERS,
   clearKey,
-  readGitHubToken,
   readKeys,
   readModelCache,
   saveKey,
-  saveGitHubToken,
   saveModelCache,
 } from "@/lib/providers";
 
@@ -108,39 +106,6 @@ function ProviderRow({ provider }) {
 }
 
 function ConnectionsPage() {
-  const [token, setToken] = useState("");
-  const [account, setAccount] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState(null);
-
-  useEffect(() => {
-    const stored = readGitHubToken();
-    if (!stored) return;
-    setToken(stored);
-    githubAccount({ data: { token: stored } })
-      .then((res) => setAccount(res.ok ? res : null))
-      .catch(() => setAccount(null));
-  }, []);
-
-  const verify = async () => {
-    setBusy(true);
-    setStatus(null);
-    try {
-      const res = await githubAccount({ data: { token: token.trim() } });
-      if (res.ok) {
-        saveGitHubToken(token.trim());
-        setAccount(res);
-      } else {
-        setStatus(res.error || "That token was rejected.");
-        setAccount(null);
-      }
-    } catch (err) {
-      setStatus(err?.message || "Could not reach GitHub.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <WorkspaceHeader />
@@ -162,41 +127,9 @@ function ConnectionsPage() {
 
         <div className="mt-10">
           <p className="label-mono">github</p>
-          <Panel className="mt-3 p-4">
-            <div className="flex items-center gap-2">
-              <h3 className="font-display text-[12px] font-semibold uppercase tracking-[0.16em] text-white">
-                save projects to your repos
-              </h3>
-              {account?.login && (
-                <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de]">
-                  {account.login}
-                </span>
-              )}
-            </div>
-            <div className="mt-3 flex items-center gap-2">
-              <input
-                type="password"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                placeholder="personal access token with repo scope"
-                className="h-8 min-w-0 flex-1 rounded-sm border border-white/10 bg-[#0b0b0b] px-2.5 font-mono text-[11.5px] text-white outline-none focus:border-[#b0c4de]/50"
-              />
-              <button
-                type="button"
-                onClick={verify}
-                disabled={busy || token.trim().length < 10}
-                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-[#e0f7ff]/30 bg-[#e0f7ff]/[0.05] px-3 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-[#e0f7ff] transition hover:bg-[#e0f7ff]/[0.14] disabled:opacity-40"
-              >
-                {busy && <Loader2 className="h-3 w-3 animate-spin" />}
-                verify
-              </button>
-            </div>
-            {status && <p className="mt-2 font-body text-[11.5px] text-red-400">{status}</p>}
-            <p className="mt-2 font-body text-[11px] leading-relaxed text-muted-foreground">
-              Verified through GitHub and stored on this device only. Each user connects their own
-              account, so nobody can write to another person's repos.
-            </p>
-          </Panel>
+          <div className="mt-3">
+            <GitHubConnectionCard />
+          </div>
         </div>
       </main>
     </div>

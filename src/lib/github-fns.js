@@ -104,10 +104,17 @@ export const pushProjectToGitHub = createServerFn({ method: "POST" })
       if (put.ok) pushed.push(path);
     }
 
+    const repo = `${me.login}/${data.repoName}`;
+    const url = `https://github.com/${repo}`;
+    await base44.entities.Project.update(data.projectId, {
+      repo_full_name: repo,
+      repo_url: url,
+    }).catch(() => {});
+
     return {
       ok: true,
-      repo: `${me.login}/${data.repoName}`,
-      url: `https://github.com/${me.login}/${data.repoName}`,
+      repo,
+      url,
       pushed: pushed.length,
       total: files.length,
     };
