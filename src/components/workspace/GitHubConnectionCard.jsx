@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Check, ExternalLink, Loader2, Unplug } from "lucide-react";
 import Panel from "@/components/workspace/Panel";
-import { githubAccount } from "@/lib/github-fns";
-import { readGitHubToken, saveGitHubToken } from "@/lib/providers";
+import { connectGitHub, disconnectGitHub, githubStatus } from "@/lib/github-fns";
+import { purgeLegacyGitHubTokens } from "@/lib/providers";
 import { useAuth } from "@/lib/AuthContext";
 
 export const GITHUB_TOKEN_URL =
@@ -17,15 +17,10 @@ export default function GitHubConnectionCard() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const stored = readGitHubToken(user?.id);
-    if (!stored) {
-      setToken("");
-      setAccount(null);
-      return;
-    }
-    setToken(stored);
-    githubAccount({ data: { token: stored } })
-      .then((res) => setAccount(res.ok ? res : null))
+    if (!user) return;
+    purgeLegacyGitHubTokens();
+    githubStatus()
+      .then((res) => setAccount(res.connected ? res : null))
       .catch(() => setAccount(null));
   }, [user?.id]);
 
@@ -35,9 +30,9 @@ export default function GitHubConnectionCard() {
     setBusy(true);
     setError(null);
     try {
-      const res = await githubAccount({ data: { token: trimmed } });
+      const res = await connectGitHub({ data: { token: trimmed } });
       if (res.ok) {
-        saveGitHubToken(user?.id, trimmed);
+        setToken("");
         setAccount(res);
       } else {
         setAccount(null);
@@ -50,11 +45,18 @@ export default function GitHubConnectionCard() {
     }
   };
 
-  const disconnect = () => {
-    saveGitHubToken(user?.id, "");
-    setToken("");
-    setAccount(null);
+  const disconnect = async () => {
+    setBusy(true);
     setError(null);
+    try {
+      await disconnectGitHub();
+      setToken("");
+      setAccount(null);
+    } catch (err) {
+      setError(err?.message || "Could not disconnect.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -87,9 +89,10 @@ export default function GitHubConnectionCard() {
           <button
             type="button"
             onClick={disconnect}
-            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-white/10 px-3 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground transition hover:border-red-400/40 hover:text-red-300"
+            disabled={busy}
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-white/10 px-3 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground transition hover:border-red-400/40 hover:text-red-300 disabled:opacity-40"
           >
-            <Unplug className="h-3 w-3" />
+            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Unplug className="h-3 w-3" />}
             disconnect
           </button>
         </div>
@@ -119,9 +122,9 @@ export default function GitHubConnectionCard() {
 
       {error && <p className="mt-2 font-body text-[11.5px] text-red-400">{error}</p>}
       <p className="mt-2 font-body text-[11px] leading-relaxed text-muted-foreground">
-        Your key, your GitHub. It stays in this browser and is used only when you save a project,
-        so the repository is created in your own account — no Base44 connector, no shared account,
-        no integration credits.
+        Your key, your GitHub. The token is verified and kept on the server, never written to this
+        browser or handed back to it, and only your own account can ever use it — so repositories are
+        created in your own account with no connector and no integration credits.
       </p>
     </Panel>
   );

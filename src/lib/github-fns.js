@@ -19,27 +19,64 @@ const b64 = (text) => {
   return btoa(binary);
 };
 
-/** Verify a personal access token and return the account that owns it. */
-export const githubAccount = createServerFn({ method: "POST" })
+/**
+ * The caller's own GitHub connection, read on the server with the service role
+ * so the token never travels to the browser. Scoped by user_id, which the client
+ * cannot set.
+ */
+const linkFor = async (context) => {
+  const rows = await context
+    .getBase44()
+    .asServiceRole.entities.GitHubLink.filter({ user_id: context.user.id }, "-created_date", 1);
+  return rows[0] || null;
+};
+
+/** Whether the caller has a GitHub connection, and whose account it is. No token. */
+export const githubStatus = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .handler(async ({ context }) => {
+    const link = await linkFor(context);
+    return { connected: Boolean(link?.token), login: link?.login || "" };
+  });
+
+/** Verify a personal access token, then keep it server-side for this user only. */
+export const connectGitHub = createServerFn({ method: "POST" })
   .middleware([requireUser])
   .validator(z.object({ token: z.string().min(10).max(400) }))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const res = await fetch(`${GH}/user`, { headers: headersFor(data.token) });
     if (!res.ok) return { ok: false, error: `GitHub answered ${res.status}` };
-    const user = await res.json();
-    return { ok: true, login: user.login, avatar: user.avatar_url };
+    const gh = await res.json();
+
+    const admin = context.getBase44().asServiceRole;
+    const existing = await linkFor(context);
+    const payload = { user_id: context.user.id, login: gh.login, token: data.token };
+
+    if (existing) await admin.entities.GitHubLink.update(existing.id, payload);
+    else await admin.entities.GitHubLink.create(payload);
+
+    return { ok: true, login: gh.login, avatar: gh.avatar_url };
+  });
+
+/** Forget the caller's stored token. */
+export const disconnectGitHub = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .handler(async ({ context }) => {
+    await context
+      .getBase44()
+      .asServiceRole.entities.GitHubLink.deleteMany({ user_id: context.user.id });
+    return { ok: true };
   });
 
 /**
  * Push the project's existing files into a repository owned by the caller's own
- * GitHub account. Files stay the same ProjectFile records — nothing is copied.
+ * GitHub account. The token is read from the caller's stored connection.
  */
 export const pushProjectToGitHub = createServerFn({ method: "POST" })
   .middleware([requireUser])
   .validator(
     z.object({
       projectId: z.string().max(64),
-      token: z.string().min(10).max(400),
       repoName: z
         .string()
         .min(1)
@@ -49,6 +86,10 @@ export const pushProjectToGitHub = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, context }) => {
+    const link = await linkFor(context);
+    if (!link?.token) return { ok: false, error: "Connect your GitHub account first." };
+    const token = link.token;
+
     const base44 = context.getBase44();
     const files = await base44.entities.ProjectFile.filter(
       { project_id: data.projectId },
@@ -57,13 +98,13 @@ export const pushProjectToGitHub = createServerFn({ method: "POST" })
     );
     if (!files.length) return { ok: false, error: "This project has no files to save yet." };
 
-    const meRes = await fetch(`${GH}/user`, { headers: headersFor(data.token) });
+    const meRes = await fetch(`${GH}/user`, { headers: headersFor(token) });
     if (!meRes.ok) return { ok: false, error: `GitHub auth failed (${meRes.status}).` };
     const me = await meRes.json();
 
     let repoRes = await fetch(`${GH}/user/repos`, {
       method: "POST",
-      headers: headersFor(data.token),
+      headers: headersFor(token),
       body: JSON.stringify({
         name: data.repoName,
         description: data.description || "Built with xecutr",
@@ -73,7 +114,7 @@ export const pushProjectToGitHub = createServerFn({ method: "POST" })
     });
     if (repoRes.status === 422) {
       repoRes = await fetch(`${GH}/repos/${me.login}/${data.repoName}`, {
-        headers: headersFor(data.token),
+        headers: headersFor(token),
       });
     }
     if (!repoRes.ok) {
@@ -86,7 +127,7 @@ export const pushProjectToGitHub = createServerFn({ method: "POST" })
       const url = `${GH}/repos/${me.login}/${data.repoName}/contents/${path}`;
 
       let sha;
-      const existing = await fetch(url, { headers: headersFor(data.token) });
+      const existing = await fetch(url, { headers: headersFor(token) });
       if (existing.ok) {
         const body = await existing.json();
         sha = body?.sha;
@@ -94,7 +135,7 @@ export const pushProjectToGitHub = createServerFn({ method: "POST" })
 
       const put = await fetch(url, {
         method: "PUT",
-        headers: headersFor(data.token),
+        headers: headersFor(token),
         body: JSON.stringify({
           message: `xecutr: save ${path}`,
           content: b64(file.content || ""),

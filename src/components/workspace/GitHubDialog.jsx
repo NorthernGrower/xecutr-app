@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { githubAccount, pushProjectToGitHub } from "@/lib/github-fns";
-import { readGitHubToken, saveGitHubToken } from "@/lib/providers";
+import { connectGitHub, githubStatus, pushProjectToGitHub } from "@/lib/github-fns";
 import { useAuth } from "@/lib/AuthContext";
 import { GITHUB_TOKEN_URL } from "@/components/workspace/GitHubConnectionCard";
 
@@ -22,22 +21,19 @@ export default function GitHubDialog({ open, onOpenChange, project, onSaved }) {
         (project?.name || "xecutr-project").toLowerCase().replace(/[^a-z0-9._-]+/g, "-"),
     );
     setStatus(null);
-    const stored = readGitHubToken(user?.id);
-    if (stored) {
-      setToken(stored);
-      githubAccount({ data: { token: stored } })
-        .then((res) => setAccount(res.ok ? res : null))
-        .catch(() => setAccount(null));
-    }
-  }, [open, project]);
+    if (!user) return;
+    githubStatus()
+      .then((res) => setAccount(res.connected ? res : null))
+      .catch(() => setAccount(null));
+  }, [open, project, user?.id]);
 
   const connect = async () => {
     setBusy(true);
     setStatus(null);
     try {
-      const res = await githubAccount({ data: { token: token.trim() } });
+      const res = await connectGitHub({ data: { token: token.trim() } });
       if (res.ok) {
-        saveGitHubToken(user?.id, token.trim());
+        setToken("");
         setAccount(res);
       } else {
         setStatus({ error: res.error || "That token was rejected." });
@@ -54,7 +50,7 @@ export default function GitHubDialog({ open, onOpenChange, project, onSaved }) {
     setStatus(null);
     try {
       const res = await pushProjectToGitHub({
-        data: { projectId: project.id, token: token.trim(), repoName: repo.trim() },
+        data: { projectId: project.id, repoName: repo.trim() },
       });
       if (res.ok) {
         setStatus({ ok: `Saved ${res.pushed}/${res.total} files to ${res.repo}`, url: res.url });
@@ -89,7 +85,8 @@ export default function GitHubDialog({ open, onOpenChange, project, onSaved }) {
               className="h-9 w-full rounded-sm border border-white/10 bg-[#0b0b0b] px-2.5 font-mono text-[12px] text-white outline-none focus:border-[#b0c4de]/50"
             />
             <p className="mt-1.5 font-body text-[11px] leading-relaxed text-muted-foreground">
-              Stored in this browser only, sent with this request and never kept on the server.
+              Verified and kept on the server for your account only — never stored in this browser,
+              and never sent back to it.
             </p>
             <a
               href={GITHUB_TOKEN_URL}

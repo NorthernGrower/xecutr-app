@@ -1,0 +1,44 @@
+{
+  "name": "GitHubLink",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "App user this GitHub connection belongs to"
+    },
+    "login": {
+      "type": "string",
+      "description": "GitHub account login, shown in the workspace"
+    },
+    "token": {
+      "type": "string",
+      "description": "Personal access token. Server-side only \u2014 never returned to the browser."
+    }
+  },
+  "required": [
+    "user_id",
+    "token"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

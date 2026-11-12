@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { FolderGit2 } from "lucide-react";
 import GitHubDialog from "@/components/workspace/GitHubDialog";
-import { githubAccount } from "@/lib/github-fns";
-import { readGitHubToken } from "@/lib/providers";
+import { githubStatus } from "@/lib/github-fns";
 import { useAuth } from "@/lib/AuthContext";
 
 /** The signed-in user's own GitHub state for this project: connect, then update the repo. */
@@ -12,13 +11,9 @@ export default function GitHubRepoButton({ project, onSaved }) {
   const [login, setLogin] = useState(null);
 
   useEffect(() => {
-    const stored = readGitHubToken(user?.id);
-    if (!stored) {
-      setLogin(null);
-      return;
-    }
-    githubAccount({ data: { token: stored } })
-      .then((res) => setLogin(res.ok ? res.login : null))
+    if (!user) return;
+    githubStatus()
+      .then((res) => setLogin(res.connected ? res.login : null))
       .catch(() => setLogin(null));
   }, [user?.id, project?.repo_full_name]);
 

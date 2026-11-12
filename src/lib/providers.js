@@ -106,7 +106,6 @@ export const PROVIDERS = [
 
 const KEY_STORE = "xecutr:provider-keys";
 const MODEL_STORE = "xecutr:model-cache";
-const GH_STORE = "xecutr:github";
 const SETTINGS_STORE = "xecutr:model-choice";
 
 export function providerById(id) {
@@ -140,30 +139,19 @@ export const clearKey = (id) => {
   write(KEY_STORE, next);
 };
 
+/** One-time cleanup: GitHub tokens used to be cached in this browser. */
+export const purgeLegacyGitHubTokens = () => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem("xecutr:github");
+  } catch {
+    /* storage unavailable */
+  }
+};
+
 export const readModelCache = () => read(MODEL_STORE, {});
 export const saveModelCache = (id, models) =>
   write(MODEL_STORE, { ...readModelCache(), [id]: { models, at: Date.now() } });
-
-/** GitHub tokens are kept per account, so two users on one device never share one. */
-const githubStore = () => {
-  const raw = read(GH_STORE, {});
-  if (typeof raw === "string") return raw ? { "*": raw } : {};
-  return raw && typeof raw === "object" ? raw : {};
-};
-
-export const readGitHubToken = (userId) => {
-  const map = githubStore();
-  return map[userId] || map["*"] || "";
-};
-
-export const saveGitHubToken = (userId, token) => {
-  if (!userId) return;
-  const map = githubStore();
-  delete map["*"];
-  if (token) map[userId] = token;
-  else delete map[userId];
-  write(GH_STORE, map);
-};
 
 /** Per-project model choice, so each project reopens on the model it was built with. */
 export const readSettings = (scope) => read(SETTINGS_STORE, {})[scope] || null;
