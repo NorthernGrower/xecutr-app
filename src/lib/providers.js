@@ -144,8 +144,26 @@ export const readModelCache = () => read(MODEL_STORE, {});
 export const saveModelCache = (id, models) =>
   write(MODEL_STORE, { ...readModelCache(), [id]: { models, at: Date.now() } });
 
-export const readGitHubToken = () => read(GH_STORE, "");
-export const saveGitHubToken = (token) => write(GH_STORE, token);
+/** GitHub tokens are kept per account, so two users on one device never share one. */
+const githubStore = () => {
+  const raw = read(GH_STORE, {});
+  if (typeof raw === "string") return raw ? { "*": raw } : {};
+  return raw && typeof raw === "object" ? raw : {};
+};
+
+export const readGitHubToken = (userId) => {
+  const map = githubStore();
+  return map[userId] || map["*"] || "";
+};
+
+export const saveGitHubToken = (userId, token) => {
+  if (!userId) return;
+  const map = githubStore();
+  delete map["*"];
+  if (token) map[userId] = token;
+  else delete map[userId];
+  write(GH_STORE, map);
+};
 
 /** Per-project model choice, so each project reopens on the model it was built with. */
 export const readSettings = (scope) => read(SETTINGS_STORE, {})[scope] || null;

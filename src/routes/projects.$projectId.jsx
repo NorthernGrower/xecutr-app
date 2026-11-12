@@ -5,6 +5,7 @@ import { base44 } from "@/api/base44Client";
 import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
 import ChatPane from "@/components/workspace/ChatPane";
 import FilePanel from "@/components/workspace/FilePanel";
+import GitHubRepoButton from "@/components/workspace/GitHubRepoButton";
 import ProjectPreview from "@/components/workspace/ProjectPreview";
 import ProjectRail from "@/components/workspace/ProjectRail";
 import { useAuth } from "@/lib/AuthContext";
@@ -158,6 +159,7 @@ function ProjectWorkspace() {
             </span>
 
             <div className="ml-auto flex items-center gap-1">
+              <GitHubRepoButton project={project} onSaved={reload} />
               <button
                 type="button"
                 onClick={() => setPane("chat")}

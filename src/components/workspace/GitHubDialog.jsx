@@ -3,10 +3,12 @@ import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { githubAccount, pushProjectToGitHub } from "@/lib/github-fns";
 import { readGitHubToken, saveGitHubToken } from "@/lib/providers";
+import { useAuth } from "@/lib/AuthContext";
 import { GITHUB_TOKEN_URL } from "@/components/workspace/GitHubConnectionCard";
 
 /** Save the project's existing files into a repo on the user's own GitHub. */
 export default function GitHubDialog({ open, onOpenChange, project, onSaved }) {
+  const { user } = useAuth();
   const [token, setToken] = useState("");
   const [account, setAccount] = useState(null);
   const [repo, setRepo] = useState("");
@@ -15,9 +17,12 @@ export default function GitHubDialog({ open, onOpenChange, project, onSaved }) {
 
   useEffect(() => {
     if (!open) return;
-    setRepo((project?.name || "xecutr-project").toLowerCase().replace(/[^a-z0-9._-]+/g, "-"));
+    setRepo(
+      project?.repo_full_name?.split("/")[1] ||
+        (project?.name || "xecutr-project").toLowerCase().replace(/[^a-z0-9._-]+/g, "-"),
+    );
     setStatus(null);
-    const stored = readGitHubToken();
+    const stored = readGitHubToken(user?.id);
     if (stored) {
       setToken(stored);
       githubAccount({ data: { token: stored } })
@@ -32,7 +37,7 @@ export default function GitHubDialog({ open, onOpenChange, project, onSaved }) {
     try {
       const res = await githubAccount({ data: { token: token.trim() } });
       if (res.ok) {
-        saveGitHubToken(token.trim());
+        saveGitHubToken(user?.id, token.trim());
         setAccount(res);
       } else {
         setStatus({ error: res.error || "That token was rejected." });
@@ -127,7 +132,7 @@ export default function GitHubDialog({ open, onOpenChange, project, onSaved }) {
                 className="inline-flex w-full items-center justify-center gap-2 rounded-sm border border-[#e0f7ff]/35 bg-[#e0f7ff]/[0.06] py-2 font-display text-[11px] font-semibold uppercase tracking-[0.16em] text-[#e0f7ff] transition hover:bg-[#e0f7ff]/[0.14] disabled:opacity-40"
               >
                 {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                push files
+                {project?.repo_full_name ? "update repo" : "push files"}
               </button>
             </div>
           ) : (

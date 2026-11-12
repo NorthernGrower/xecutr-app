@@ -3,25 +3,31 @@ import { Check, ExternalLink, Loader2, Unplug } from "lucide-react";
 import Panel from "@/components/workspace/Panel";
 import { githubAccount } from "@/lib/github-fns";
 import { readGitHubToken, saveGitHubToken } from "@/lib/providers";
+import { useAuth } from "@/lib/AuthContext";
 
 export const GITHUB_TOKEN_URL =
   "https://github.com/settings/tokens/new?scopes=repo&description=xecutr";
 
 /** Each user connects their own GitHub account with a token that carries repo scope. */
 export default function GitHubConnectionCard() {
+  const { user } = useAuth();
   const [token, setToken] = useState("");
   const [account, setAccount] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const stored = readGitHubToken();
-    if (!stored) return;
+    const stored = readGitHubToken(user?.id);
+    if (!stored) {
+      setToken("");
+      setAccount(null);
+      return;
+    }
     setToken(stored);
     githubAccount({ data: { token: stored } })
       .then((res) => setAccount(res.ok ? res : null))
       .catch(() => setAccount(null));
-  }, []);
+  }, [user?.id]);
 
   const connect = async () => {
     const trimmed = token.trim();
@@ -31,7 +37,7 @@ export default function GitHubConnectionCard() {
     try {
       const res = await githubAccount({ data: { token: trimmed } });
       if (res.ok) {
-        saveGitHubToken(trimmed);
+        saveGitHubToken(user?.id, trimmed);
         setAccount(res);
       } else {
         setAccount(null);
@@ -45,7 +51,7 @@ export default function GitHubConnectionCard() {
   };
 
   const disconnect = () => {
-    saveGitHubToken("");
+    saveGitHubToken(user?.id, "");
     setToken("");
     setAccount(null);
     setError(null);
