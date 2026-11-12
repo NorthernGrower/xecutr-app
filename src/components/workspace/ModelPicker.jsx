@@ -23,7 +23,7 @@ export default function ModelPicker({ value, onChange, models, onDiscover, busy 
         }}
         className="h-7 max-w-[170px] rounded-sm border border-white/10 bg-[#0b0b0b] px-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de] outline-none"
       >
-        <option value={GATEWAY.id}>auto · keyless gateway</option>
+        <option value={GATEWAY.id}>auto · keyless</option>
         {ready.map((p) => (
           <option key={p.id} value={p.id}>
             {p.label}

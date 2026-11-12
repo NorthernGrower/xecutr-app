@@ -207,7 +207,14 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
           </div>
         )}
         {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
+          <MessageBubble
+            key={message.id}
+            message={
+              message.role === "assistant" && !message.provider
+                ? { ...message, ...labelFor(settings) }
+                : message
+            }
+          />
         ))}
         {isLoading && (
           <div className="flex items-center gap-2 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[#b0c4de]">

@@ -70,6 +70,7 @@ export default function MessageBubble({ message }) {
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
+        data-testid={isUser ? "user-message" : "assistant-message"}
         className={`max-w-[92%] rounded-sm border px-4 py-3 ${
           isUser
             ? "border-white/10 bg-white/[0.045]"
