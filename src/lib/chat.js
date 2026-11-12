@@ -6,6 +6,7 @@ import { gatewayModel } from "@/lib/ai.server";
 import { requireUser } from "@/lib/auth-middleware";
 import { spendTrialTurn } from "@/lib/trial-quota.server";
 import { GATEWAY, GATEWAY_MODEL_IDS, providerById } from "@/lib/providers";
+import { fetchPublicText } from "@/lib/net-safe";
 
 const MAX_ROUNDS = 3;
 const MAX_FILE_CHARS = 60000;
@@ -43,71 +44,6 @@ const languageOf = (path) => {
     go: "go",
   };
   return map[ext] || "text";
-};
-
-/**
- * Only public web addresses may be fetched. Blocks loopback, private ranges,
- * link-local (cloud metadata), CGNAT and single-label internal hostnames, and
- * refuses credentials or non-standard ports.
- */
-const isPublicHttpUrl = (url) => {
-  if (url.protocol !== "https:" && url.protocol !== "http:") return false;
-  if (url.username || url.password) return false;
-  if (url.port && url.port !== "80" && url.port !== "443") return false;
-
-  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
-  if (!host.includes(".")) return false;
-  if (/(^|\.)(localhost|internal|local|home|lan|corp|intranet)$/.test(host)) return false;
-
-  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-  if (v4) {
-    const a = Number(v4[1]);
-    const b = Number(v4[2]);
-    if (a === 0 || a === 10 || a === 127) return false;
-    if (a === 169 && b === 254) return false;
-    if (a === 172 && b >= 16 && b <= 31) return false;
-    if (a === 192 && b === 168) return false;
-    if (a === 100 && b >= 64 && b <= 127) return false;
-    if (a >= 224) return false;
-  }
-  return true;
-};
-
-/** Fetches a public page as text, re-checking the address on every redirect. */
-const fetchPublicText = async (raw) => {
-  let url;
-  try {
-    url = new URL(raw);
-  } catch {
-    return { error: "That is not a valid URL." };
-  }
-
-  for (let hop = 0; hop < 4; hop += 1) {
-    if (!isPublicHttpUrl(url)) return { error: "Only public web addresses can be fetched." };
-
-    const res = await fetch(url.toString(), {
-      redirect: "manual",
-      signal: AbortSignal.timeout(10000),
-      headers: { "user-agent": "xecutr-agent" },
-    });
-
-    if (res.status >= 300 && res.status < 400) {
-      const next = res.headers.get("location");
-      if (!next) return { status: res.status, text: "" };
-      url = new URL(next, url);
-      continue;
-    }
-
-    const type = res.headers.get("content-type") || "";
-    if (type && !/text\/|json|xml|javascript/i.test(type)) {
-      return { status: res.status, error: `that address served ${type}` };
-    }
-
-    const text = await res.text();
-    return { status: res.status, text: text.slice(0, 20000) };
-  }
-
-  return { error: "That address redirected too many times." };
 };
 
 const projectTools = (base44, projectId, attachments) => {
