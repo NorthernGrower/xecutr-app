@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { FolderGit2, Plus } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
 import Panel from "@/components/workspace/Panel";
 import ProjectsSummary from "@/components/projects/ProjectsSummary";
 import ProjectStatusCard from "@/components/projects/ProjectStatusCard";
+import ImportRepoDialog from "@/components/projects/ImportRepoDialog";
 import { useAuth } from "@/lib/AuthContext";
 
 export const Route = createFileRoute("/projects/")({
@@ -26,6 +27,7 @@ function ProjectsDashboard() {
   const { user, isLoadingAuth, navigateToLogin } = useAuth();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -60,14 +62,28 @@ function ProjectsDashboard() {
               Status, activity and output for everything you've started.
             </p>
           </div>
-          <Link
-            to="/"
-            className="inline-flex items-center gap-1.5 rounded-sm border border-[#e0f7ff]/30 bg-[#e0f7ff]/[0.05] px-3 py-2 font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-[#e0f7ff] transition hover:bg-[#e0f7ff]/[0.14]"
-          >
-            <Plus className="h-3 w-3" strokeWidth={2} />
-            new project
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {user && (
+              <button
+                type="button"
+                onClick={() => setImportOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-sm border border-white/15 px-3 py-2 font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition hover:border-[#b0c4de]/50 hover:text-white"
+              >
+                <FolderGit2 className="h-3 w-3" strokeWidth={1.8} />
+                import repo
+              </button>
+            )}
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1.5 rounded-sm border border-[#e0f7ff]/30 bg-[#e0f7ff]/[0.05] px-3 py-2 font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-[#e0f7ff] transition hover:bg-[#e0f7ff]/[0.14]"
+            >
+              <Plus className="h-3 w-3" strokeWidth={2} />
+              new project
+            </Link>
+          </div>
         </div>
+
+        <ImportRepoDialog open={importOpen} onOpenChange={setImportOpen} />
 
         {!isLoadingAuth && !user && (
           <Panel className="mt-8 p-6 text-center">

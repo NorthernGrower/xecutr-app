@@ -68,6 +68,162 @@ export const disconnectGitHub = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+const TEXT_FILE =
+  /\.(txt|md|markdown|json|jsonc|js|jsx|mjs|cjs|ts|tsx|css|scss|sass|less|html|htm|xml|yml|yaml|csv|svg|py|rb|go|rs|java|c|h|cpp|hpp|cs|php|sh|toml|ini|env|sql|vue|svelte|astro|graphql|prisma|dockerfile)$/i;
+const SKIP_DIR =
+  /(^|\/)(node_modules|\.git|dist|build|out|\.next|\.nuxt|\.svelte-kit|\.venv|venv|__pycache__|vendor|coverage|target|\.cache)(\/|$)/i;
+const MAX_FILES = 80;
+const MAX_CHARS = 120000;
+
+const langOf = (path) => {
+  const ext = (path.split(".").pop() || "").toLowerCase();
+  const map = {
+    js: "javascript",
+    mjs: "javascript",
+    cjs: "javascript",
+    jsx: "jsx",
+    ts: "typescript",
+    tsx: "tsx",
+    json: "json",
+    md: "markdown",
+    css: "css",
+    html: "html",
+    py: "python",
+    sh: "shell",
+    yml: "yaml",
+    yaml: "yaml",
+    sql: "sql",
+    rs: "rust",
+    go: "go",
+  };
+  return map[ext] || "text";
+};
+
+/** The caller's GitHub repositories, for the import picker. */
+export const listGitHubRepos = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .handler(async ({ context }) => {
+    const link = await linkFor(context);
+    if (!link?.token) return { connected: false, repos: [] };
+
+    const res = await fetch(
+      `${GH}/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator`,
+      { headers: headersFor(link.token) },
+    );
+    if (!res.ok) {
+      return { connected: true, login: link.login, repos: [], error: `GitHub answered ${res.status}.` };
+    }
+
+    const rows = await res.json();
+    const repos = (Array.isArray(rows) ? rows : []).map((repo) => ({
+      full_name: repo.full_name,
+      name: repo.name,
+      private: Boolean(repo.private),
+      branch: repo.default_branch || "main",
+      updated_at: repo.updated_at || null,
+    }));
+    return { connected: true, login: link.login, repos };
+  });
+
+/**
+ * Copy a repository's source files into a new project of the caller's, using
+ * their own stored GitHub connection.
+ */
+export const importGitHubRepo = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(
+    z.object({
+      repoFullName: z
+        .string()
+        .max(140)
+        .regex(/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/, "Use owner/repo"),
+      branch: z.string().max(120).optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const link = await linkFor(context);
+    if (!link?.token) return { ok: false, error: "Connect your GitHub account first." };
+    const token = link.token;
+
+    const metaRes = await fetch(`${GH}/repos/${data.repoFullName}`, { headers: headersFor(token) });
+    if (!metaRes.ok) return { ok: false, error: `GitHub answered ${metaRes.status}.` };
+    const meta = await metaRes.json();
+    const branch = data.branch?.trim() || meta.default_branch || "main";
+
+    const treeRes = await fetch(
+      `${GH}/repos/${data.repoFullName}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+      { headers: headersFor(token) },
+    );
+    if (!treeRes.ok) {
+      return { ok: false, error: `Could not read the ${branch} branch (${treeRes.status}).` };
+    }
+    const tree = await treeRes.json();
+
+    const paths = (tree.tree || [])
+      .filter(
+        (entry) =>
+          entry.type === "blob" &&
+          entry.path &&
+          TEXT_FILE.test(entry.path) &&
+          !SKIP_DIR.test(entry.path) &&
+          (entry.size ?? 0) <= MAX_CHARS,
+      )
+      .map((entry) => entry.path)
+      .sort()
+      .slice(0, MAX_FILES);
+
+    if (!paths.length) return { ok: false, error: "That repository has no readable source files." };
+
+    const encodePath = (path) => path.split("/").map(encodeURIComponent).join("/");
+    const raw = { ...headersFor(token), Accept: "application/vnd.github.raw" };
+
+    const files = [];
+    for (let index = 0; index < paths.length; index += 10) {
+      const batch = paths.slice(index, index + 10);
+      const got = await Promise.all(
+        batch.map(async (path) => {
+          try {
+            const res = await fetch(
+              `${GH}/repos/${data.repoFullName}/contents/${encodePath(path)}?ref=${encodeURIComponent(branch)}`,
+              { headers: raw, signal: AbortSignal.timeout(15000) },
+            );
+            if (!res.ok) return null;
+            const text = await res.text();
+            return { path, content: text.slice(0, MAX_CHARS) };
+          } catch {
+            return null;
+          }
+        }),
+      );
+      files.push(...got.filter(Boolean));
+    }
+
+    if (!files.length) return { ok: false, error: "Those files could not be read." };
+
+    const base44 = context.getBase44();
+    const project = await base44.entities.Project.create({
+      name: meta.name || data.repoFullName,
+      summary: (meta.description || `Imported from ${data.repoFullName}`).slice(0, 300),
+      file_count: files.length,
+      message_count: 0,
+      last_activity: new Date().toISOString(),
+      repo_full_name: data.repoFullName,
+      repo_url: meta.html_url || `https://github.com/${data.repoFullName}`,
+    });
+
+    await base44.entities.ProjectFile.bulkCreate(
+      files.map((file) => ({
+        project_id: project.id,
+        path: file.path,
+        content: file.content,
+        language: langOf(file.path),
+        size: file.content.length,
+      })),
+    );
+
+    return { ok: true, projectId: project.id, name: project.name, files: files.length };
+  });
+
 /**
  * Push the project's existing files into a repository owned by the caller's own
  * GitHub account. The token is read from the caller's stored connection.
