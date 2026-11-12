@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
@@ -165,9 +165,17 @@ function WorkspaceEntry() {
                 <h2 className="font-display text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
                   recent projects
                 </h2>
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                  {projects.length} saved
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                    {projects.length} saved
+                  </span>
+                  <Link
+                    to="/projects"
+                    className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#b0c4de] transition hover:text-[#e0f7ff]"
+                  >
+                    view all
+                  </Link>
+                </div>
               </div>
               {projects.length === 0 ? (
                 <p className="mt-4 font-body text-[12.5px] text-muted-foreground">

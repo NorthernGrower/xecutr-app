@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Cpu, LogOut, Plug } from "lucide-react";
+import { Cpu, LayoutGrid, LogOut, Plug } from "lucide-react";
 import Mark from "@/components/brand/Mark";
 import { useAuth } from "@/lib/AuthContext";
 
@@ -38,6 +38,13 @@ export default function WorkspaceHeader({ providerLabel }) {
 
           {user && (
             <>
+              <Link
+                to="/projects"
+                className="inline-flex items-center gap-1.5 rounded-sm border border-white/10 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground transition hover:border-[#b0c4de]/40 hover:text-white"
+              >
+                <LayoutGrid className="h-3 w-3" strokeWidth={1.6} />
+                projects
+              </Link>
               <Link
                 to="/connections"
                 className="inline-flex items-center gap-1.5 rounded-sm border border-white/10 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground transition hover:border-[#b0c4de]/40 hover:text-white"
