@@ -97,6 +97,12 @@ function ProjectWorkspace() {
     [project],
   );
 
+  const openFile = (path) => {
+    if (!path) return;
+    setSelected(path);
+    if (typeof window !== "undefined" && window.innerWidth < 768) setPane("files");
+  };
+
   if (!isLoadingAuth && !user) {
     return (
       <div className="min-h-screen bg-background">
@@ -163,26 +169,41 @@ function ProjectWorkspace() {
               <button
                 type="button"
                 onClick={() => setPane("chat")}
-                className={`rounded-sm border p-1.5 ${pane === "chat" ? "border-[#e0f7ff]/40 text-[#e0f7ff]" : "border-white/10 text-muted-foreground"}`}
                 aria-label="Chat"
+                className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-1.5 font-display text-[10px] font-semibold uppercase tracking-[0.14em] transition ${
+                  pane === "chat"
+                    ? "border-[#e0f7ff]/40 bg-[#e0f7ff]/[0.06] text-[#e0f7ff]"
+                    : "border-white/10 text-muted-foreground hover:text-white"
+                }`}
               >
                 <MessageSquare className="h-3.5 w-3.5" strokeWidth={1.6} />
+                chat
               </button>
               <button
                 type="button"
                 onClick={() => setPane("preview")}
-                className={`rounded-sm border p-1.5 ${pane === "preview" ? "border-[#e0f7ff]/40 text-[#e0f7ff]" : "border-white/10 text-muted-foreground"}`}
                 aria-label="Preview"
+                className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-1.5 font-display text-[10px] font-semibold uppercase tracking-[0.14em] transition ${
+                  pane !== "chat"
+                    ? "border-[#e0f7ff]/40 bg-[#e0f7ff]/[0.06] text-[#e0f7ff]"
+                    : "border-white/10 text-muted-foreground hover:text-white"
+                }`}
               >
                 <Eye className="h-3.5 w-3.5" strokeWidth={1.6} />
+                preview
               </button>
               <button
                 type="button"
                 onClick={() => setPane("files")}
-                className={`rounded-sm border p-1.5 xl:hidden ${pane === "files" ? "border-[#e0f7ff]/40 text-[#e0f7ff]" : "border-white/10 text-muted-foreground"}`}
                 aria-label="Files"
+                className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-1.5 font-display text-[10px] font-semibold uppercase tracking-[0.14em] transition md:hidden ${
+                  pane === "files"
+                    ? "border-[#e0f7ff]/40 bg-[#e0f7ff]/[0.06] text-[#e0f7ff]"
+                    : "border-white/10 text-muted-foreground"
+                }`}
               >
                 <Files className="h-3.5 w-3.5" strokeWidth={1.6} />
+                files
               </button>
             </div>
           </div>
@@ -194,14 +215,15 @@ function ProjectWorkspace() {
               initialMessages={boot}
               pendingPrompt={pendingPrompt}
               onSaved={reload}
+              onOpenFile={openFile}
             />
           </div>
 
-          <div className={`min-h-0 flex-1 px-3 pb-3 sm:px-4 ${pane === "preview" ? "block" : "hidden"}`}>
+          <div className={`min-h-0 flex-1 px-3 pb-3 sm:px-4 ${pane !== "chat" ? "block" : "hidden"}`}>
             <ProjectPreview project={project} files={files} />
           </div>
 
-          <div className="min-h-0 flex-1 px-3 pb-3 xl:hidden">
+          <div className="min-h-0 flex-1 px-3 pb-3 md:hidden">
             {pane === "files" && (
               <FilePanel
                 project={project}
@@ -209,18 +231,20 @@ function ProjectWorkspace() {
                 selected={selected}
                 onSelect={setSelected}
                 onRefresh={reload}
+                onPreview={() => setPane("preview")}
               />
             )}
           </div>
         </main>
 
-        <aside className="hidden w-[340px] shrink-0 xl:block">
+        <aside className="hidden w-[300px] shrink-0 border-l border-white/[0.07] md:block lg:w-[340px]">
           <FilePanel
             project={project}
             files={files}
             selected={selected}
             onSelect={setSelected}
             onRefresh={reload}
+            onPreview={() => setPane("preview")}
           />
         </aside>
       </div>

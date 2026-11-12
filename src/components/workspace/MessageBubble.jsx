@@ -1,45 +1,26 @@
-import { useState } from "react";
-import { Check, Copy, FileCode2, Terminal } from "lucide-react";
+import { FileCode2 } from "lucide-react";
 import { parseSegments, textOfMessage } from "@/lib/text-segments";
 
-function CopyButton({ text }) {
-  const [done, setDone] = useState(false);
+/** A written file shown as a row that opens it in the files panel, never as code. */
+function FileChip({ path, language, onOpen }) {
+  const clickable = Boolean(onOpen);
   return (
     <button
       type="button"
-      onClick={() => {
-        navigator.clipboard.writeText(text);
-        setDone(true);
-        setTimeout(() => setDone(false), 1400);
-      }}
-      className="inline-flex items-center gap-1 rounded-sm border border-white/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground transition hover:border-[#b0c4de]/40 hover:text-white"
+      onClick={() => onOpen?.(path)}
+      disabled={!clickable}
+      className={`mt-2 flex w-full items-center gap-2 rounded-sm border border-white/10 bg-white/[0.02] px-3 py-2 text-left transition ${
+        clickable ? "hover:border-[#b0c4de]/45 hover:bg-white/[0.045]" : "cursor-default"
+      }`}
     >
-      {done ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-      {done ? "copied" : "copy"}
+      <FileCode2 className="h-3.5 w-3.5 shrink-0 text-[#b0c4de]" strokeWidth={1.6} />
+      <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-[#dfe6ee]">
+        {path || language || "file"}
+      </span>
+      <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
+        view
+      </span>
     </button>
-  );
-}
-
-function CodeBlock({ path, language, content }) {
-  return (
-    <div className="mt-2 overflow-hidden rounded-sm border border-white/10 bg-[#080808]">
-      <div className="flex items-center gap-2 border-b border-white/[0.07] px-3 py-1.5">
-        {path ? (
-          <FileCode2 className="h-3 w-3 text-[#b0c4de]" strokeWidth={1.6} />
-        ) : (
-          <Terminal className="h-3 w-3 text-muted-foreground" strokeWidth={1.6} />
-        )}
-        <span className="truncate font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de]">
-          {path || language}
-        </span>
-        <span className="ml-auto shrink-0">
-          <CopyButton text={content} />
-        </span>
-      </div>
-      <pre className="max-h-[380px] overflow-auto px-3 py-2.5 font-mono text-[11.5px] leading-relaxed text-[#c9d3de]">
-        {content}
-      </pre>
-    </div>
   );
 }
 
@@ -58,8 +39,8 @@ function ToolCard({ part }) {
   );
 }
 
-/** One chat message: provider label, prose, code/file blocks, tool cards. */
-export default function MessageBubble({ message }) {
+/** One chat message: provider label, prose, written-file rows and tool cards. */
+export default function MessageBubble({ message, onOpenFile }) {
   const isUser = message.role === "user";
   const text = textOfMessage(message);
   const segments = isUser ? [{ type: "text", content: text }] : parseSegments(text);
@@ -72,9 +53,7 @@ export default function MessageBubble({ message }) {
       <div
         data-testid={isUser ? "user-message" : "assistant-message"}
         className={`max-w-[92%] rounded-sm border px-4 py-3 ${
-          isUser
-            ? "border-white/10 bg-white/[0.045]"
-            : "border-[#b0c4de]/20 bg-[#0d0d0d]"
+          isUser ? "border-white/10 bg-white/[0.045]" : "border-[#b0c4de]/20 bg-[#0d0d0d]"
         }`}
       >
         {!isUser && (message.provider || message.model) && (
@@ -90,14 +69,9 @@ export default function MessageBubble({ message }) {
             <p key={i} className="whitespace-pre-wrap font-body text-[13.5px] leading-relaxed text-[#dfe6ee]">
               {seg.content}
             </p>
-          ) : (
-            <CodeBlock
-              key={i}
-              path={seg.type === "file" ? seg.path : undefined}
-              language={seg.language}
-              content={seg.content}
-            />
-          ),
+          ) : seg.type === "file" ? (
+            <FileChip key={i} path={seg.path} onOpen={onOpenFile} />
+          ) : null,
         )}
 
         {toolCalls.map((part, i) => (

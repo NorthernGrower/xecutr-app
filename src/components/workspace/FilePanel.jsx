@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Copy, Download, FileArchive, FolderGit2 } from "lucide-react";
+import { Copy, Download, Eye, FileArchive, FolderGit2 } from "lucide-react";
 import Panel from "@/components/workspace/Panel";
 import GitHubDialog from "@/components/workspace/GitHubDialog";
 import { downloadZip } from "@/lib/zip";
 
-export default function FilePanel({ project, files, selected, onSelect, onRefresh }) {
+export default function FilePanel({ project, files, selected, onSelect, onRefresh, onPreview }) {
   const [openGitHub, setOpenGitHub] = useState(false);
   const active = files.find((f) => f.path === selected) || files[0] || null;
 
@@ -23,6 +23,18 @@ export default function FilePanel({ project, files, selected, onSelect, onRefres
         <span className="label-mono">files</span>
         <span className="font-mono text-[10px] text-muted-foreground">{files.length}</span>
         <div className="ml-auto flex items-center gap-1">
+          {onPreview && (
+            <button
+              type="button"
+              onClick={onPreview}
+              disabled={!files.length}
+              title="Preview the project"
+              className="inline-flex items-center gap-1.5 rounded-sm border border-[#e0f7ff]/30 bg-[#e0f7ff]/[0.05] px-2 py-1 font-display text-[9px] font-semibold uppercase tracking-[0.14em] text-[#e0f7ff] transition hover:bg-[#e0f7ff]/[0.14] disabled:opacity-30"
+            >
+              <Eye className="h-3 w-3" strokeWidth={1.8} />
+              preview
+            </button>
+          )}
           <button
             type="button"
             onClick={() => downloadZip(files, project?.name)}

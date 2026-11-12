@@ -33,7 +33,7 @@ const labelFor = (settings) => {
  * The one chat surface: the signed-out trial and a saved project both stream
  * through the same server turn.
  */
-export default function ChatPane({ projectId, initialMessages = [], pendingPrompt, onSaved, trial = false }) {
+export default function ChatPane({ projectId, initialMessages = [], pendingPrompt, onSaved, trial = false, onOpenFile }) {
   const [prompt, setPrompt] = useState("");
   const [attachments, setAttachments] = useState([]);
   const [settings, setSettings] = useState({ providerId: GATEWAY.id, model: "automatic" });
@@ -233,6 +233,7 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
         {messages.map((message) => (
           <MessageBubble
             key={message.id}
+            onOpenFile={onOpenFile}
             message={
               message.role === "assistant" && !message.provider
                 ? { ...message, ...labelFor(settings) }
