@@ -113,8 +113,9 @@ export default function GitHubConnectionCard() {
 
       {error && <p className="mt-2 font-body text-[11.5px] text-red-400">{error}</p>}
       <p className="mt-2 font-body text-[11px] leading-relaxed text-muted-foreground">
-        Verified through GitHub and stored on this device only. Every user connects their own
-        account, so saving a project creates the repository in your GitHub, not anyone else's.
+        Your key, your GitHub. It stays in this browser and is used only when you save a project,
+        so the repository is created in your own account — no Base44 connector, no shared account,
+        no integration credits.
       </p>
     </Panel>
   );
