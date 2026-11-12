@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Files, MessageSquare } from "lucide-react";
+import { Check, Eye, Files, MessageSquare } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
 import ChatPane from "@/components/workspace/ChatPane";
 import FilePanel from "@/components/workspace/FilePanel";
+import ProjectPreview from "@/components/workspace/ProjectPreview";
 import ProjectRail from "@/components/workspace/ProjectRail";
 import { useAuth } from "@/lib/AuthContext";
 
@@ -56,7 +57,7 @@ function ProjectWorkspace() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
-  const [mobileTab, setMobileTab] = useState("chat");
+  const [pane, setPane] = useState("chat");
 
   const reload = useCallback(() => setRefreshKey((k) => k + 1), []);
 
@@ -156,19 +157,27 @@ function ProjectWorkspace() {
               {files.length} files
             </span>
 
-            <div className="ml-auto flex items-center gap-1 xl:hidden">
+            <div className="ml-auto flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => setMobileTab("chat")}
-                className={`rounded-sm border p-1.5 ${mobileTab === "chat" ? "border-[#e0f7ff]/40 text-[#e0f7ff]" : "border-white/10 text-muted-foreground"}`}
+                onClick={() => setPane("chat")}
+                className={`rounded-sm border p-1.5 ${pane === "chat" ? "border-[#e0f7ff]/40 text-[#e0f7ff]" : "border-white/10 text-muted-foreground"}`}
                 aria-label="Chat"
               >
                 <MessageSquare className="h-3.5 w-3.5" strokeWidth={1.6} />
               </button>
               <button
                 type="button"
-                onClick={() => setMobileTab("files")}
-                className={`rounded-sm border p-1.5 ${mobileTab === "files" ? "border-[#e0f7ff]/40 text-[#e0f7ff]" : "border-white/10 text-muted-foreground"}`}
+                onClick={() => setPane("preview")}
+                className={`rounded-sm border p-1.5 ${pane === "preview" ? "border-[#e0f7ff]/40 text-[#e0f7ff]" : "border-white/10 text-muted-foreground"}`}
+                aria-label="Preview"
+              >
+                <Eye className="h-3.5 w-3.5" strokeWidth={1.6} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setPane("files")}
+                className={`rounded-sm border p-1.5 xl:hidden ${pane === "files" ? "border-[#e0f7ff]/40 text-[#e0f7ff]" : "border-white/10 text-muted-foreground"}`}
                 aria-label="Files"
               >
                 <Files className="h-3.5 w-3.5" strokeWidth={1.6} />
@@ -176,7 +185,7 @@ function ProjectWorkspace() {
             </div>
           </div>
 
-          <div className={`min-h-0 flex-1 px-3 sm:px-4 ${mobileTab === "chat" ? "block" : "hidden xl:block"}`}>
+          <div className={`min-h-0 flex-1 px-3 sm:px-4 ${pane === "chat" ? "block" : "hidden"}`}>
             <ChatPane
               key={projectId}
               projectId={projectId}
@@ -186,8 +195,12 @@ function ProjectWorkspace() {
             />
           </div>
 
+          <div className={`min-h-0 flex-1 px-3 pb-3 sm:px-4 ${pane === "preview" ? "block" : "hidden"}`}>
+            <ProjectPreview project={project} files={files} />
+          </div>
+
           <div className="min-h-0 flex-1 px-3 pb-3 xl:hidden">
-            {mobileTab === "files" && (
+            {pane === "files" && (
               <FilePanel
                 project={project}
                 files={files}
