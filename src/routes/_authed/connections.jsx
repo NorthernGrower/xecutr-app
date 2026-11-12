@@ -28,7 +28,7 @@ function ProviderRow({ provider }) {
 
   useEffect(() => {
     setKey(readKeys()[provider.id] || "");
-    setModels(readModelCache()[provider.id]?.models || null);
+    setModels(readModelCache()[provider.id]?.models || provider.models || null);
   }, [provider.id]);
 
   const save = async () => {
@@ -61,6 +61,11 @@ function ProviderRow({ provider }) {
         <h3 className="font-display text-[12px] font-semibold uppercase tracking-[0.16em] text-white">
           {provider.label}
         </h3>
+        {provider.free && (
+          <span className="rounded-sm border border-[#e0f7ff]/30 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-[#e0f7ff]">
+            free tier
+          </span>
+        )}
         {models?.length ? (
           <span className="rounded-sm border border-[#b0c4de]/25 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-[#b0c4de]">
             {models.length} models

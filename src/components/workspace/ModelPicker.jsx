@@ -9,8 +9,8 @@ export default function ModelPicker({ value, onChange, models, onDiscover, busy 
   const keys = readKeys();
   const cache = readModelCache();
   const ready = PROVIDERS.filter((p) => keys[p.id]);
-  const list = models ?? cache[value.providerId]?.models ?? [];
   const provider = value.providerId === GATEWAY.id ? GATEWAY : PROVIDERS.find((p) => p.id === value.providerId);
+  const list = models ?? cache[value.providerId]?.models ?? provider?.models ?? [];
 
   return (
     <div className="flex flex-wrap items-center gap-2">

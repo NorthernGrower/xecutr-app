@@ -31,6 +31,29 @@ export const GATEWAY_MODEL_IDS = GATEWAY_MODELS.map((m) => m.id);
 
 export const PROVIDERS = [
   {
+    id: "ovh",
+    label: "OVHcloud AI Endpoints",
+    baseURL: "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
+    defaultModel: "Meta-Llama-3_3-70B-Instruct",
+    connect: "https://endpoints.ai.cloud.ovh.com/",
+    free: true,
+    /** Free-tier endpoints, selectable without discovery. */
+    models: [
+      "Meta-Llama-3_3-70B-Instruct",
+      "Meta-Llama-3_1-70B-Instruct",
+      "Meta-Llama-3_1-8B-Instruct",
+      "Mistral-Small-3.2-24B-Instruct-2506",
+      "Mistral-Nemo-Instruct-2407",
+      "Mistral-7B-Instruct-v0.3",
+      "Qwen3-32B",
+      "Qwen3-Coder-30B-A3B-Instruct",
+      "Qwen2.5-VL-72B-Instruct",
+      "gpt-oss-20b",
+      "gpt-oss-120b",
+      "DeepSeek-R1-0528",
+    ],
+  },
+  {
     id: "gemini",
     label: "Google Gemini",
     baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
