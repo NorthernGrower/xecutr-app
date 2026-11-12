@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@tanstack/ai-react";
 import { AlertTriangle, Paperclip, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import Composer from "@/components/workspace/Composer";
 import MessageBubble from "@/components/workspace/MessageBubble";
 import ModelPicker from "@/components/workspace/ModelPicker";
+import PromptHistory from "@/components/workspace/PromptHistory";
 import { streamTurn, discoverModels } from "@/lib/chat";
 import {
   GATEWAY,
@@ -216,6 +217,21 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
 
   const cachedModels = readModelCache()[settings.providerId]?.models;
 
+  // Every prompt sent in this project, newest first, straight from the saved turns.
+  const promptHistory = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (let i = messages.length - 1; i >= 0 && out.length < 20; i -= 1) {
+      const entry = messages[i];
+      if (entry.role !== "user") continue;
+      const text = textOfMessage(entry).trim();
+      if (!text || seen.has(text)) continue;
+      seen.add(text);
+      out.push(text);
+    }
+    return out;
+  }, [messages]);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 space-y-3 overflow-auto px-1 py-4 sm:px-2">
@@ -292,6 +308,7 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
                   onChange={(e) => upload(e.target.files?.[0])}
                 />
               </label>
+              <PromptHistory prompts={promptHistory} onPick={setPrompt} />
               <ModelPicker
                 value={settings}
                 onChange={chooseModel}

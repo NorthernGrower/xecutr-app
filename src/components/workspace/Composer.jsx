@@ -17,7 +17,7 @@ export default function Composer({
         e.preventDefault();
         if (canSend) onSubmit();
       }}
-      className="glow-edge rounded-sm border border-[#b0c4de]/20 bg-[#0d0d0d]"
+      className="glow-edge rounded-sm border border-[#b0c4de]/30 bg-[#1c2128]"
     >
       <textarea
         value={value}
@@ -27,9 +27,9 @@ export default function Composer({
         }}
         rows={3}
         placeholder={placeholder}
-        className="w-full resize-none bg-transparent px-4 py-3.5 font-body text-[14px] leading-relaxed text-white outline-none placeholder:text-muted-foreground/70"
+        className="w-full resize-none bg-transparent px-4 py-3.5 font-body text-[14px] leading-relaxed text-[#eef3f8] outline-none placeholder:text-[#7e8b99]"
       />
-      <div className="flex items-center justify-between gap-3 border-t border-white/[0.07] px-3 py-2.5">
+      <div className="flex items-center justify-between gap-3 border-t border-white/10 px-3 py-2.5">
         <div className="min-w-0 truncate">{footer}</div>
         <button
           type="submit"
