@@ -6,14 +6,26 @@ import Composer from "@/components/workspace/Composer";
 import MessageBubble from "@/components/workspace/MessageBubble";
 import ModelPicker from "@/components/workspace/ModelPicker";
 import { streamTurn, discoverModels } from "@/lib/chat";
-import { GATEWAY, isTextLike, providerById, readKeys, readModelCache, saveModelCache } from "@/lib/providers";
+import {
+  GATEWAY,
+  isTextLike,
+  providerById,
+  readKeys,
+  readModelCache,
+  readSettings,
+  saveModelCache,
+  saveSettings,
+} from "@/lib/providers";
 import { fileBlocks, textOfMessage } from "@/lib/text-segments";
 import { addTrialMessage } from "@/lib/trial";
 
 const MAX_UPLOAD = 25 * 1024 * 1024;
 
 const labelFor = (settings) => {
-  if (settings.providerId === GATEWAY.id) return { provider: "keyless gateway", model: settings.model || "auto" };
+  if (settings.providerId === GATEWAY.id) {
+    const auto = !settings.model || settings.model === "automatic";
+    return { provider: "keyless gateway", model: auto ? "auto" : settings.model };
+  }
   return { provider: providerById(settings.providerId)?.label || settings.providerId, model: settings.model };
 };
 
@@ -24,7 +36,7 @@ const labelFor = (settings) => {
 export default function ChatPane({ projectId, initialMessages = [], pendingPrompt, onSaved, trial = false }) {
   const [prompt, setPrompt] = useState("");
   const [attachments, setAttachments] = useState([]);
-  const [settings, setSettings] = useState({ providerId: GATEWAY.id, model: "" });
+  const [settings, setSettings] = useState({ providerId: GATEWAY.id, model: "automatic" });
   const [models, setModels] = useState(null);
   const [discovering, setDiscovering] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -174,6 +186,18 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
     savedRef.current?.();
   };
 
+  const scope = projectId || "trial";
+
+  useEffect(() => {
+    const stored = readSettings(scope);
+    if (stored?.providerId) setSettings(stored);
+  }, [scope]);
+
+  const chooseModel = (next) => {
+    setSettings(next);
+    saveSettings(scope, next);
+  };
+
   const runDiscovery = async () => {
     const key = readKeys()[settings.providerId];
     if (!key) return;
@@ -269,7 +293,7 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
               </label>
               <ModelPicker
                 value={settings}
-                onChange={setSettings}
+                onChange={chooseModel}
                 models={models ?? cachedModels}
                 onDiscover={runDiscovery}
                 busy={discovering}

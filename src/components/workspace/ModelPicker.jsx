@@ -1,5 +1,5 @@
 import { Check, RefreshCw } from "lucide-react";
-import { GATEWAY, PROVIDERS, readKeys, readModelCache } from "@/lib/providers";
+import { GATEWAY, GATEWAY_MODELS, PROVIDERS, readKeys, readModelCache } from "@/lib/providers";
 
 /**
  * Provider + model selector. "auto" routes to the keyless gateway; picking a
@@ -31,7 +31,21 @@ export default function ModelPicker({ value, onChange, models, onDiscover, busy 
         ))}
       </select>
 
-      {value.providerId !== GATEWAY.id && (
+      {value.providerId === GATEWAY.id ? (
+        <select
+          value={value.model || GATEWAY.defaultModel}
+          onChange={(e) => onChange({ ...value, model: e.target.value })}
+          aria-label="Model"
+          title="Model for this project"
+          className="h-7 max-w-[190px] rounded-sm border border-white/10 bg-[#0b0b0b] px-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de] outline-none focus:border-[#b0c4de]/50"
+        >
+          {GATEWAY_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      ) : (
         <>
           <input
             list="xecutr-models"

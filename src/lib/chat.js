@@ -3,7 +3,7 @@ import { openaiCompatibleText } from "@tanstack/ai-openai/compatible";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { gatewayModel } from "@/lib/ai.server";
-import { GATEWAY, providerById } from "@/lib/providers";
+import { GATEWAY, GATEWAY_MODEL_IDS, providerById } from "@/lib/providers";
 
 const MAX_ROUNDS = 3;
 const MAX_FILE_CHARS = 60000;
@@ -215,7 +215,9 @@ export const streamTurn = createServerFn({ method: "POST" })
     const requested =
       data.providerId && data.providerId !== GATEWAY.id ? providerById(data.providerId) : null;
 
-    let adapter = gatewayModel(base44, "automatic");
+    // A pinned gateway model is honoured; anything else falls back to automatic.
+    const pinned = GATEWAY_MODEL_IDS.includes(data.model) ? data.model : "automatic";
+    let adapter = gatewayModel(base44, pinned);
     if (requested && data.apiKey) {
       const live = await providerAnswers(requested.baseURL, data.apiKey);
       if (live) {

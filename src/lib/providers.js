@@ -14,6 +14,21 @@ export const GATEWAY = {
   note: "Keyless. No signup needed — answers are routed by the shared gateway.",
 };
 
+/** Models the keyless gateway can be pinned to. "automatic" lets it choose. */
+export const GATEWAY_MODELS = [
+  { id: "automatic", label: "auto · best available" },
+  { id: "gemini_3_8_flash", label: "Gemini 3.8 Flash" },
+  { id: "gpt_6_luna", label: "GPT-6 Luna" },
+  { id: "gpt_6_sol", label: "GPT-6 Sol" },
+  { id: "gpt_6_astra", label: "GPT-6 Astra" },
+  { id: "claude-sonnet-5", label: "Claude Sonnet 5" },
+  { id: "claude_opus_5_5", label: "Claude Opus 5.5" },
+  { id: "claude_fable_5_1", label: "Claude Fable 5.1" },
+  { id: "Base 1_2", label: "Base 1.2" },
+];
+
+export const GATEWAY_MODEL_IDS = GATEWAY_MODELS.map((m) => m.id);
+
 export const PROVIDERS = [
   {
     id: "gemini",
@@ -69,6 +84,7 @@ export const PROVIDERS = [
 const KEY_STORE = "xecutr:provider-keys";
 const MODEL_STORE = "xecutr:model-cache";
 const GH_STORE = "xecutr:github";
+const SETTINGS_STORE = "xecutr:model-choice";
 
 export function providerById(id) {
   if (id === GATEWAY.id) return GATEWAY;
@@ -107,6 +123,11 @@ export const saveModelCache = (id, models) =>
 
 export const readGitHubToken = () => read(GH_STORE, "");
 export const saveGitHubToken = (token) => write(GH_STORE, token);
+
+/** Per-project model choice, so each project reopens on the model it was built with. */
+export const readSettings = (scope) => read(SETTINGS_STORE, {})[scope] || null;
+export const saveSettings = (scope, settings) =>
+  write(SETTINGS_STORE, { ...read(SETTINGS_STORE, {}), [scope]: settings });
 
 /** Files that are cheap to send inline as attachments. */
 export const isTextLike = (name = "") =>
