@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, Github } from "lucide-react";
 import StatusPill from "@/components/projects/StatusPill";
+import ProjectDownloadButton from "@/components/projects/ProjectDownloadButton";
 import { formatRelative, projectStatus, stampOf } from "@/lib/project-status";
 
 function Stat({ label, value }) {
@@ -39,6 +40,7 @@ export default function ProjectStatusCard({ project }) {
       <div className="mt-3 flex items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
         <span>{formatRelative(stampOf(project))}</span>
         <div className="flex items-center gap-3">
+          <ProjectDownloadButton project={project} />
           {project.repo_url && (
             <a
               href={project.repo_url}
