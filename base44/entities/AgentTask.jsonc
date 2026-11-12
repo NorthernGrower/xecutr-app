@@ -1,0 +1,112 @@
+{
+  "name": "AgentTask",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "description": "Project the work belongs to, once it exists"
+    },
+    "project_name": {
+      "type": "string",
+      "description": "Project name as shown on the board"
+    },
+    "title": {
+      "type": "string",
+      "description": "One line: what the agent is doing"
+    },
+    "detail": {
+      "type": "string",
+      "description": "Longer description of the work"
+    },
+    "note": {
+      "type": "string",
+      "description": "Latest progress line, kept current by the agent"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "build",
+        "edit",
+        "audit",
+        "debug",
+        "inspect"
+      ],
+      "enumColors": [
+        "blue",
+        "purple",
+        "yellow",
+        "red",
+        "pink"
+      ],
+      "default": "build"
+    },
+    "status": {
+      "type": "string",
+      "description": "Current state of the work",
+      "enum": [
+        "queued",
+        "working",
+        "blocked",
+        "done",
+        "failed"
+      ],
+      "enumColors": [
+        "gray",
+        "blue",
+        "yellow",
+        "green",
+        "red"
+      ],
+      "default": "working"
+    },
+    "conversation_id": {
+      "type": "string",
+      "description": "Agent session the work happens in"
+    }
+  },
+  "required": [
+    "title",
+    "status"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -25,6 +25,7 @@ export default function DeleteProjectButton({ project, onDeleted }) {
       await base44.entities.ProjectFile.deleteMany(owned);
       await base44.entities.Message.deleteMany(owned);
       await base44.entities.MemoryNote.deleteMany(owned);
+      await base44.entities.AgentTask.deleteMany(owned);
       await base44.entities.Project.delete(project.id);
       setOpen(false);
       onDeleted?.(project.id);
