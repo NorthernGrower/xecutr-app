@@ -25,6 +25,7 @@ const CAPABILITIES = [
   "edits code on your existing projects",
   "audits code and lists the real risks",
   "debugs a symptom down to the root cause",
+  "inspects a live site, repo or binary before rebuilding a feature",
 ];
 
 function AgentPage() {

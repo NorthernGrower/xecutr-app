@@ -72,7 +72,8 @@ const normalise = (path) =>
 
 const resolveImport = (from, specifier, known) => {
   const base = specifier.startsWith("/") ? specifier.slice(1) : `${dirOf(from)}/${specifier}`;
-  const clean = normalise(base);
+  const resolved = /\/$/.test(specifier) ? `${normalise(base)}/index` : normalise(base);
+  const clean = resolved.replace(/^\/+/, "");
   const extensions = ["", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".json"];
   const indexes = ["/index.js", "/index.jsx", "/index.ts", "/index.tsx"];
   return [...extensions.map((ext) => `${clean}${ext}`), ...indexes.map((suffix) => `${clean}${suffix}`)].find((candidate) =>
@@ -244,9 +245,13 @@ export async function analyzeRepository(repo, branch, token) {
   const envVars = [...new Set(scan(files, /(?:process\.env|import\.meta\.env)\.([A-Z0-9_]{2,})/, 60).map((entry) => entry.value))].slice(0, 30);
   const routes = scan(files, /\b(?:app|router)\.(?:get|post|put|patch|delete|use)\(\s*["'`](\/[^"'`]*)["'`]/, 15);
 
-  const entries = [...new Set([pkg.main, ...tree.tree || []
-    .map((entry) => entry.path)
-    .filter((path) => path && /(^|\/)(index|main|app|server|electron)\.(js|mjs|cjs|ts|jsx|tsx)$/.test(path))])]
+  const treePaths = (tree.tree || []).map((entry) => entry.path).filter(Boolean);
+  const entries = [
+    ...new Set([
+      pkg.main,
+      ...treePaths.filter((path) => /(^|\/)(index|main|app|server|electron)\.(js|mjs|cjs|ts|jsx|tsx)$/.test(path)),
+    ]),
+  ]
     .filter(Boolean)
     .slice(0, 8);
 
