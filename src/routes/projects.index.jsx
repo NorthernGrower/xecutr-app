@@ -43,6 +43,8 @@ function ProjectsDashboard() {
     };
   }, [user]);
 
+  const removeProject = (id) => setProjects((prev) => prev.filter((p) => p.id !== id));
+
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background">
       <WorkspaceHeader />
@@ -106,11 +108,19 @@ function ProjectsDashboard() {
                 </Link>
               </Panel>
             ) : (
-              <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {projects.map((project) => (
-                  <ProjectStatusCard key={project.id} project={project} />
-                ))}
-              </div>
+              <>
+                <div className="mt-8 flex items-center justify-between gap-3">
+                  <p className="label-mono">all projects</p>
+                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                    {projects.length} total
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {projects.map((project) => (
+                    <ProjectStatusCard key={project.id} project={project} onDeleted={removeProject} />
+                  ))}
+                </div>
+              </>
             )}
           </>
         )}
