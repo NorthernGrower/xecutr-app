@@ -1,51 +1,43 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useChat } from "@tanstack/ai-react";
 import { AlertTriangle, Paperclip, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import Composer from "@/components/workspace/Composer";
 import MessageBubble from "@/components/workspace/MessageBubble";
 import ModelPicker from "@/components/workspace/ModelPicker";
 import PromptHistory from "@/components/workspace/PromptHistory";
-import { streamTurn, discoverModels } from "@/lib/chat";
-import {
-  GATEWAY,
-  isTextLike,
-  providerById,
-  readKeys,
-  readModelCache,
-  readSettings,
-  saveModelCache,
-  saveSettings,
-} from "@/lib/providers";
+import useXecutrChat from "@/hooks/use-xecutr-chat";
+import { xecutrCatalog } from "@/lib/chat";
+import { isTextLike, readSettings, saveSettings } from "@/lib/providers";
 import { fileBlocks, textOfMessage } from "@/lib/text-segments";
 import { addTrialMessage } from "@/lib/trial";
 
 const MAX_UPLOAD = 25 * 1024 * 1024;
 
-const labelFor = (settings) => {
-  if (settings.providerId === GATEWAY.id) {
-    const auto = !settings.model || settings.model === "automatic";
-    return { provider: "keyless gateway", model: auto ? "auto" : settings.model };
-  }
-  return { provider: providerById(settings.providerId)?.label || settings.providerId, model: settings.model };
+const labelFor = (settings, catalog) => {
+  const provider = (catalog?.providers || []).find((p) => p.id === settings.providerId);
+  return {
+    provider: provider?.id || "xecutr gateway",
+    model: settings.model || provider?.defaultModel || "auto",
+  };
 };
 
 /**
- * The one chat surface: the signed-out trial and a saved project both stream
- * through the same server turn.
+ * The one chat surface. Every turn streams from the xecutr gateway through the
+ * server proxy; a saved project sends its files and memory along and keeps the
+ * files the gateway writes.
  */
 export default function ChatPane({ projectId, initialMessages = [], pendingPrompt, onSaved, trial = false, onOpenFile }) {
   const [prompt, setPrompt] = useState("");
   const [attachments, setAttachments] = useState([]);
-  const [settings, setSettings] = useState({ providerId: GATEWAY.id, model: "automatic" });
-  const [models, setModels] = useState(null);
-  const [discovering, setDiscovering] = useState(false);
+  const [settings, setSettings] = useState({ providerId: "", model: "" });
+  const [catalog, setCatalog] = useState({ providers: [] });
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [notice, setNotice] = useState(null);
 
   const projectRef = useRef(projectId);
   const settingsRef = useRef(settings);
-  const attachRef = useRef([]);
   const savedRef = useRef(onSaved);
+  const lastPromptRef = useRef("");
   const sentPending = useRef(false);
   const endRef = useRef(null);
 
@@ -53,29 +45,55 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
   settingsRef.current = settings;
   savedRef.current = onSaved;
 
-  const fetcher = useCallback((input, { signal }) => {
-    const keys = readKeys();
-    const active = settingsRef.current;
-    return streamTurn({
-      data: {
-        messages: input.messages
-          .map((m) => ({ role: m.role, content: textOfMessage(m) }))
-          .filter((m) => m.content)
-          .slice(-20),
-        projectId: projectRef.current || null,
-        providerId: active.providerId,
-        model: active.model || null,
-        apiKey: active.providerId === GATEWAY.id ? null : keys[active.providerId] || null,
-        attachments: attachRef.current.map((a) => ({ name: a.name, content: a.content || "" })),
-      },
-      signal,
-    });
+  const loadCatalog = useCallback(async () => {
+    setLoadingCatalog(true);
+    try {
+      const next = await xecutrCatalog();
+      setCatalog(next);
+      if (next?.error) setNotice(next.error);
+    } catch {
+      setNotice("The provider catalogue could not be loaded.");
+    } finally {
+      setLoadingCatalog(false);
+    }
   }, []);
 
-  const persist = useCallback(
-    async (text) => {
+  useEffect(() => {
+    loadCatalog();
+  }, [loadCatalog]);
+
+  /** The gateway sends its whole working file set after each write. */
+  const writeFiles = useCallback(
+    async (incoming) => {
       const pid = projectRef.current;
-      const labels = labelFor(settingsRef.current);
+      if (!pid || trial) return;
+
+      for (const file of incoming) {
+        if (!file?.path) continue;
+        const content = typeof file.content === "string" ? file.content : "";
+        const existing = await base44.entities.ProjectFile.filter(
+          { project_id: pid, path: file.path },
+          "-created_date",
+          1,
+        );
+        if (existing[0]) {
+          await base44.entities.ProjectFile.update(existing[0].id, { content, size: content.length });
+        } else {
+          await base44.entities.ProjectFile.create({
+            project_id: pid,
+            path: file.path,
+            content,
+            size: content.length,
+          });
+        }
+      }
+    },
+    [trial],
+  );
+
+  const persist = useCallback(
+    async ({ text, provider, model }) => {
+      const pid = projectRef.current;
       if (!text) return;
 
       if (trial || !pid) {
@@ -87,11 +105,11 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
         project_id: pid,
         role: "assistant",
         content: text,
-        provider: labels.provider,
-        model: labels.model,
+        provider,
+        model,
       });
 
-      // Fallback for replies that declared files inline instead of through tools.
+      // Fallback for replies that declared files inline instead of through a tool.
       for (const block of fileBlocks(text)) {
         const existing = await base44.entities.ProjectFile.filter(
           { project_id: pid, path: block.path },
@@ -113,11 +131,19 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
         }
       }
 
+      // The gateway takes these notes back on later turns, so context survives.
+      await base44.entities.MemoryNote.create({
+        project_id: pid,
+        note: `Asked: "${(lastPromptRef.current || "").slice(0, 160)}" — reply: ${text.slice(0, 180)}`,
+        provider,
+        model,
+      });
+
       const project = await base44.entities.Project.get(pid);
       const count = await base44.entities.ProjectFile.count({ project_id: pid });
       await base44.entities.Project.update(pid, {
-        provider: labels.provider,
-        model: labels.model,
+        provider,
+        model,
         file_count: count,
         last_activity: new Date().toISOString(),
         message_count: (project?.message_count || 0) + 1,
@@ -128,12 +154,11 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
     [trial],
   );
 
-  const { messages, sendMessage, isLoading, error } = useChat({
+  const { messages, send, isLoading, error } = useXecutrChat({
     initialMessages,
-    fetcher,
-    onFinish: (message) => {
-      const text = textOfMessage(message);
-      if (text) persist(text).catch(() => setNotice("Saved locally only — the project write failed."));
+    onFiles: writeFiles,
+    onFinish: (result) => {
+      persist(result).catch(() => setNotice("Saved locally only — the project write failed."));
     },
   });
 
@@ -144,9 +169,15 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
   useEffect(() => {
     if (pendingPrompt && !sentPending.current && !isLoading) {
       sentPending.current = true;
-      sendMessage(pendingPrompt);
+      lastPromptRef.current = pendingPrompt;
+      send({
+        text: pendingPrompt,
+        providerId: settingsRef.current.providerId,
+        model: settingsRef.current.model,
+        projectId: projectRef.current || null,
+      });
     }
-  }, [pendingPrompt, isLoading, sendMessage]);
+  }, [pendingPrompt, isLoading, send]);
 
   const upload = async (file) => {
     if (!file) return;
@@ -167,7 +198,7 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
   const submit = async () => {
     const text = prompt.trim();
     if (!text || isLoading) return;
-    attachRef.current = attachments;
+    const payload = attachments.map((a) => ({ name: a.name, content: a.content || "" }));
 
     if (!trial && projectId) {
       await base44.entities.Message.create({
@@ -180,10 +211,16 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
       addTrialMessage("user", text);
     }
 
+    lastPromptRef.current = text;
     setPrompt("");
     setAttachments([]);
-    await sendMessage(text);
-    attachRef.current = [];
+    await send({
+      text,
+      attachments: payload,
+      providerId: settings.providerId,
+      model: settings.model,
+      projectId: projectId || null,
+    });
     savedRef.current?.();
   };
 
@@ -191,31 +228,17 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
 
   useEffect(() => {
     const stored = readSettings(scope);
-    if (stored?.providerId) setSettings(stored);
+    if (stored && typeof stored.providerId === "string") {
+      // "gateway" was the old keyless route — now the gateway is the default ("").
+      const providerId = stored.providerId === "gateway" ? "" : stored.providerId;
+      setSettings({ providerId, model: stored.model || "" });
+    }
   }, [scope]);
 
   const chooseModel = (next) => {
     setSettings(next);
     saveSettings(scope, next);
   };
-
-  const runDiscovery = async () => {
-    const key = readKeys()[settings.providerId];
-    if (!key) return;
-    setDiscovering(true);
-    try {
-      const res = await discoverModels({ data: { providerId: settings.providerId, apiKey: key } });
-      setModels(res.models || []);
-      if (res.models?.length) saveModelCache(settings.providerId, res.models);
-      if (!res.models?.length) setNotice(res.error || "That provider returned no models.");
-    } catch {
-      setNotice("Model discovery failed.");
-    } finally {
-      setDiscovering(false);
-    }
-  };
-
-  const cachedModels = readModelCache()[settings.providerId]?.models;
 
   // Every prompt sent in this project, newest first, straight from the saved turns.
   const promptHistory = useMemo(() => {
@@ -252,7 +275,7 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
             onOpenFile={onOpenFile}
             message={
               message.role === "assistant" && !message.provider
-                ? { ...message, ...labelFor(settings) }
+                ? { ...message, ...labelFor(settings, catalog) }
                 : message
             }
           />
@@ -271,7 +294,7 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
           <div className="mb-2 flex items-start gap-2 rounded-sm border border-red-500/30 bg-red-500/[0.07] px-3 py-2">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" />
             <p className="font-body text-[12px] leading-relaxed text-red-300">
-              {notice || error?.message || "The provider did not answer. Try again."}
+              {notice || (typeof error === "string" ? error : error?.message) || "The gateway did not answer. Try again."}
             </p>
           </div>
         )}
@@ -310,11 +333,11 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
               </label>
               <PromptHistory prompts={promptHistory} onPick={setPrompt} />
               <ModelPicker
+                catalog={catalog}
                 value={settings}
                 onChange={chooseModel}
-                models={models ?? cachedModels}
-                onDiscover={runDiscovery}
-                busy={discovering}
+                onRefresh={loadCatalog}
+                busy={loadingCatalog}
               />
             </div>
           }

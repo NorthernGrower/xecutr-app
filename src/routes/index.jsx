@@ -47,7 +47,7 @@ function WorkspaceEntry() {
       (stored.messages || []).map((m, i) => ({
         id: `trial-${i}`,
         role: m.role,
-        provider: m.role === "assistant" ? "keyless gateway" : undefined,
+        provider: m.role === "assistant" ? "xecutr gateway" : undefined,
         model: m.role === "assistant" ? "auto" : undefined,
         parts: [{ type: "text", content: m.content }],
       })),

@@ -1,76 +1,56 @@
 import { Check, RefreshCw } from "lucide-react";
-import { GATEWAY, GATEWAY_MODELS, PROVIDERS, readKeys, readModelCache } from "@/lib/providers";
 
 /**
- * Provider + model selector. "auto" routes to the keyless gateway; picking a
- * provider needs that provider's key from the connections page.
+ * Routes a turn either automatically (free tiers first, with failover) or to one
+ * provider and model from the xecutr gateway's live catalogue.
  */
-export default function ModelPicker({ value, onChange, models, onDiscover, busy }) {
-  const keys = readKeys();
-  const cache = readModelCache();
-  const ready = PROVIDERS.filter((p) => keys[p.id]);
-  const provider = value.providerId === GATEWAY.id ? GATEWAY : PROVIDERS.find((p) => p.id === value.providerId);
-  const list = models ?? cache[value.providerId]?.models ?? provider?.models ?? [];
+export default function ModelPicker({ catalog, value, onChange, onRefresh, busy }) {
+  const providers = (catalog?.providers || []).filter((p) => p.status === "ready");
+  const active = providers.find((p) => p.id === value.providerId);
+  const models = active?.models || [];
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <select
-        value={value.providerId}
-        onChange={(e) => {
-          const next = e.target.value;
-          const chosen = next === GATEWAY.id ? GATEWAY : PROVIDERS.find((p) => p.id === next);
-          onChange({ providerId: next, model: next === GATEWAY.id ? "" : chosen?.defaultModel || "" });
-        }}
+        value={value.providerId || ""}
+        onChange={(e) => onChange({ providerId: e.target.value, model: "" })}
+        aria-label="Provider"
         className="h-7 max-w-[170px] rounded-sm border border-white/10 bg-[#0b0b0b] px-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de] outline-none"
       >
-        <option value={GATEWAY.id}>auto · keyless</option>
-        {ready.map((p) => (
+        <option value="">auto · free tiers first</option>
+        {providers.map((p) => (
           <option key={p.id} value={p.id}>
-            {p.label}
+            {p.id}
           </option>
         ))}
       </select>
 
-      {value.providerId === GATEWAY.id ? (
+      {active && (
         <select
-          value={value.model || GATEWAY.defaultModel}
+          value={value.model || ""}
           onChange={(e) => onChange({ ...value, model: e.target.value })}
           aria-label="Model"
-          title="Model for this project"
-          className="h-7 max-w-[190px] rounded-sm border border-white/10 bg-[#0b0b0b] px-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de] outline-none focus:border-[#b0c4de]/50"
+          className="h-7 max-w-[200px] rounded-sm border border-white/10 bg-[#0b0b0b] px-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de] outline-none focus:border-[#b0c4de]/50"
         >
-          {GATEWAY_MODELS.map((m) => (
+          <option value="">{`default · ${active.defaultModel || "auto"}`}</option>
+          {models.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.label}
+              {m.label || m.id}
             </option>
           ))}
         </select>
-      ) : (
-        <>
-          <input
-            list="xecutr-models"
-            value={value.model}
-            onChange={(e) => onChange({ ...value, model: e.target.value })}
-            placeholder={provider?.defaultModel || "model id"}
-            className="h-7 w-[190px] rounded-sm border border-white/10 bg-[#0b0b0b] px-2 font-mono text-[11px] text-white outline-none placeholder:text-muted-foreground/60 focus:border-[#b0c4de]/50"
-          />
-          <datalist id="xecutr-models">
-            {list.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
-          <button
-            type="button"
-            onClick={onDiscover}
-            disabled={busy}
-            title="Discover models from this provider"
-            className="inline-flex h-7 items-center gap-1 rounded-sm border border-white/10 px-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground transition hover:border-[#b0c4de]/40 hover:text-white disabled:opacity-40"
-          >
-            {busy ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-            models
-          </button>
-        </>
       )}
+
+      <button
+        type="button"
+        onClick={onRefresh}
+        disabled={busy}
+        title="Refresh the provider catalogue from the gateway"
+        className="inline-flex h-7 items-center gap-1 rounded-sm border border-white/10 px-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground transition hover:border-[#b0c4de]/40 hover:text-white disabled:opacity-40"
+      >
+        {busy ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+        models
+      </button>
     </div>
   );
 }
