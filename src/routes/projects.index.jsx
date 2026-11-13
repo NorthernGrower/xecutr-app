@@ -7,6 +7,7 @@ import Panel from "@/components/workspace/Panel";
 import ProjectsSummary from "@/components/projects/ProjectsSummary";
 import ProjectStatusCard from "@/components/projects/ProjectStatusCard";
 import ImportRepoDialog from "@/components/projects/ImportRepoDialog";
+import GitHubConnectionCard from "@/components/workspace/GitHubConnectionCard";
 import { useAuth } from "@/lib/AuthContext";
 
 export const Route = createFileRoute("/projects/")({
@@ -46,6 +47,10 @@ function ProjectsDashboard() {
   }, [user]);
 
   const removeProject = (id) => setProjects((prev) => prev.filter((p) => p.id !== id));
+
+  // After a push the card picks up its new repo link.
+  const refresh = () =>
+    base44.entities.Project.filter({}, "-updated_date", 100).then((rows) => setProjects(rows || []));
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background">
@@ -106,6 +111,10 @@ function ProjectsDashboard() {
               <ProjectsSummary projects={projects} />
             </div>
 
+            <div className="mt-4">
+              <GitHubConnectionCard />
+            </div>
+
             {loading ? (
               <p className="mt-8 label-mono">loading projects…</p>
             ) : projects.length === 0 ? (
@@ -133,7 +142,12 @@ function ProjectsDashboard() {
                 </div>
                 <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {projects.map((project) => (
-                    <ProjectStatusCard key={project.id} project={project} onDeleted={removeProject} />
+                    <ProjectStatusCard
+                      key={project.id}
+                      project={project}
+                      onDeleted={removeProject}
+                      onSaved={refresh}
+                    />
                   ))}
                 </div>
               </>

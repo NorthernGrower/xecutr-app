@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, Github } from "lucide-react";
 import StatusPill from "@/components/projects/StatusPill";
 import ProjectDownloadButton from "@/components/projects/ProjectDownloadButton";
+import ProjectGitHubButton from "@/components/projects/ProjectGitHubButton";
 import DeleteProjectButton from "@/components/projects/DeleteProjectButton";
 import { formatRelative, projectStatus, stampOf } from "@/lib/project-status";
 
@@ -14,7 +15,7 @@ function Stat({ label, value }) {
   );
 }
 
-export default function ProjectStatusCard({ project, onDeleted }) {
+export default function ProjectStatusCard({ project, onDeleted, onSaved }) {
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-md border border-white/[0.08] bg-gradient-to-b from-card to-[#0a0a0a] p-4 transition duration-200 hover:-translate-y-0.5 hover:border-[#b0c4de]/30 hover:shadow-[0_20px_45px_-28px_rgba(224,247,255,0.45)]">
       <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#b0c4de]/60 to-transparent" />
@@ -43,6 +44,7 @@ export default function ProjectStatusCard({ project, onDeleted }) {
       <div className="mt-3 flex items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
         <span className="truncate">{formatRelative(stampOf(project))}</span>
         <div className="flex shrink-0 items-center gap-3">
+          <ProjectGitHubButton project={project} onSaved={onSaved} />
           <ProjectDownloadButton project={project} />
           {project.repo_url && (
             <a
