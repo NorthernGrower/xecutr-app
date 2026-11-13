@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+#
+# Put the Base44 front-end (NorthernGrower/xecutr-app) in front of the Xecutr
+# API, so the server's address shows the app instead of the built-in UI.
+#
+# One command, on a fresh or repeat run:
+#
+#   curl -fsSL https://raw.githubusercontent.com/NorthernGrower/xecutr-app/main/deploy/frontend.sh | bash
+#
+# Idempotent: re-run it after the front-end changes and it pulls, rebuilds,
+# restarts, and re-wires everything.
+#
+# Optional environment:
+#   APP_DIR=/root/xecutr-app     where the front-end repo lives
+#   API_DIR=/root/xecutr         where the API repo lives
+#   FRONT_PORT=8082              the port the front-end runs on (loopback only)
+#   FORGE_OS_CORS_ORIGIN=...     passed through to the API container
+#   FORGE_OS_API_TOKEN=...       passed through to the API container
+#
+# If something went wrong on the server, run the same command with `diag`
+# appended and paste the output — nothing is changed, it only reports.
+
+set -euo pipefail
+
+# Self-logging: everything this script prints also lands in one file, so a
+# failure is always one paste away from a diagnosis.
+exec > >(tee /root/xecutr-install.log) 2>&1
+
+APP_DIR="${APP_DIR:-/root/xecutr-app}"
+API_DIR="${API_DIR:-/root/xecutr}"
+FRONT_PORT="${FRONT_PORT:-8082}"
+APP_REPO="https://github.com/NorthernGrower/xecutr-app.git"
+
+log() { printf '\n==> %s\n' "$*"; }
+fail() { printf '\n!! %s\n' "$*" >&2; exit 1; }
+
+[ "$(id -u)" -eq 0 ] || fail "Run this as root (or with sudo)."
+
+# --------------------------------------------------------------------- diagnose
+# Run with `diag` as the first argument to only print the state of things —
+# nothing is built, restarted or changed:
+#
+#   curl -fsSL https://raw.githubusercontent.com/NorthernGrower/xecutr-app/main/deploy/frontend.sh | bash -s -- diag
+#
+if [ "${1:-}" = "diag" ]; then
+  echo "== diag =="
+  echo "node: $(node -v 2>&1)  npm: $(npm -v 2>&1)  docker: $(docker -v 2>&1)"
+  echo
+  echo "-- front-end app dir ($APP_DIR) --"
+  git -C "$APP_DIR" log --oneline -3 2>&1 || echo "  (missing)"
+  echo
+  echo "-- API repo ($API_DIR) --"
+  git -C "$API_DIR" log --oneline -3 2>&1 || echo "  (missing)"
+  echo
+  echo "-- front-end log (/root/front.log, last 20 lines) --"
+  tail -n 20 /root/front.log 2>/dev/null || echo "  (no log yet)"
+  echo
+  echo "-- install log (/root/xecutr-install.log, last 20 lines) --"
+  tail -n 20 /root/xecutr-install.log 2>/dev/null || echo "  (no log yet)"
+  echo
+  echo "-- containers --"
+  docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' 2>&1 || true
+  echo
+  echo "-- ports --"
+  for url in http://127.0.0.1:8080/ http://127.0.0.1:8080/api/health "http://127.0.0.1:$FRONT_PORT/"; do
+    code="$(curl -fsS -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || echo 'no answer')"
+    echo "  $url -> $code"
+  done
+  echo
+  echo "== end diag =="
+  exit 0
+fi
+
+# ---------------------------------------------------------------- Node.js 22
+need_node=0
+if ! command -v node >/dev/null 2>&1; then
+  need_node=1
+else
+  major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+  [ "$major" -ge 20 ] || need_node=1
+fi
+
+if [ "$need_node" -eq 1 ]; then
+  log "Installing Node.js 22 (the front-end needs 20+)"
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  apt-get install -y nodejs
+fi
+log "Node $(node -v), npm $(npm -v)"
+
+# ------------------------------------------------------------- source of truth
+if [ -d "$APP_DIR/.git" ]; then
+  log "Updating $APP_DIR"
+  git -C "$APP_DIR" pull --ff-only || log "Could not fast-forward; building what is there."
+else
+  log "Cloning $APP_REPO"
+  rm -rf "$APP_DIR"
+  git clone --depth 1 "$APP_REPO" "$APP_DIR" \
+    || fail "Cloning failed. Is the repo public? Check: https://github.com/NorthernGrower/xecutr-app"
+fi
+
+# --------------------------------------------------------------------- build
+cd "$APP_DIR"
+log "Installing dependencies (first run takes a few minutes)"
+npm ci --no-audit --no-fund || { log "npm ci failed — trying npm install"; npm install --no-audit --no-fund; }
+log "Building the front-end"
+npm run build || fail "The build failed. Paste the lines above this message and I'll fix the cause."
+
+# -------------------------------------------------------------------- start
+# The app is a TanStack Start SSR build. Depending on how it was exported it may
+# serve from `vite preview`, from the dev server, or only inside the Cloudflare
+# runtime via wrangler — so try each in turn and keep the first that answers.
+pkill -f "vite preview" >/dev/null 2>&1 || true
+pkill -f "wrangler dev" >/dev/null 2>&1 || true
+pkill -f "vite dev" >/dev/null 2>&1 || true
+sleep 1
+
+RUNNER=/root/xecutr-frontend.sh
+: > "$RUNNER"
+chmod +x "$RUNNER"
+
+try_start() {
+  local label="$1" wait="$2" command="$3"
+  log "Trying $label"
+  cd "$APP_DIR"
+  pkill -f "vite preview" >/dev/null 2>&1 || true
+  pkill -f "wrangler dev" >/dev/null 2>&1 || true
+  pkill -f "vite dev" >/dev/null 2>&1 || true
+  sleep 1
+
+  nohup bash -lc "$command" > /root/front.log 2>&1 &
+  for _ in $(seq 1 "$wait"); do
+    sleep 1
+    if curl -fsS -o /dev/null "http://127.0.0.1:$FRONT_PORT/" 2>/dev/null; then
+      printf '#!/usr/bin/env bash\ncd %q\nexec %s\n' "$APP_DIR" "$command" > "$RUNNER"
+      chmod +x "$RUNNER"
+      log "$label is answering"
+      return 0
+    fi
+  done
+  return 1
+}
+
+if ! try_start "vite preview" 25 "npm run preview -- --port $FRONT_PORT --host 127.0.0.1"; then
+  if ! try_start "vite dev" 30 "npm run dev -- --port $FRONT_PORT --host 127.0.0.1"; then
+    try_start "wrangler dev" 40 "npx wrangler dev --port $FRONT_PORT --ip 127.0.0.1" \
+      || fail "The front-end would not start. Paste the last 30 lines of /root/front.log."
+  fi
+fi
+
+log "Front-end is answering on http://127.0.0.1:$FRONT_PORT"
+
+# Keep it alive across reboots.
+if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+  log "Installing a systemd unit so the front-end survives reboots"
+  cat > /etc/systemd/system/xecutr-frontend.service <<UNIT
+[Unit]
+Description=Xecutr front-end (Base44 app)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$APP_DIR
+ExecStart=$RUNNER
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  systemctl daemon-reload
+  systemctl enable xecutr-frontend >/dev/null 2>&1 || true
+  pkill -f "vite preview" >/dev/null 2>&1 || true
+  pkill -f "wrangler dev" >/dev/null 2>&1 || true
+  pkill -f "vite dev" >/dev/null 2>&1 || true
+  sleep 1
+  systemctl restart xecutr-frontend
+  sleep 8
+  if curl -fsS -o /dev/null "http://127.0.0.1:$FRONT_PORT/" 2>/dev/null; then
+    log "Front-end is running under systemd"
+  else
+    fail "The front-end did not come back up under systemd. Paste the last 30 lines of /root/front.log, or run the script with 'diag'."
+  fi
+fi
+
+# ------------------------------------------------------------ rewire the API
+[ -d "$API_DIR/.git" ] || fail "Missing $API_DIR — clone NorthernGrower/xecutr there first."
+cd "$API_DIR"
+log "Updating and rebuilding the API"
+git pull --ff-only >/dev/null 2>&1 || true
+docker build -t xecutr .
+
+log "Restarting the API with the front-end in front"
+docker stop xecutr >/dev/null 2>&1 || true
+docker rm xecutr >/dev/null 2>&1 || true
+docker run -d --name xecutr --restart unless-stopped --network host \
+  -e PORT=8080 \
+  -e FRONTEND_ORIGIN="http://127.0.0.1:$FRONT_PORT" \
+  -e OLLAMA_BASE_URL=http://127.0.0.1:11434/v1 \
+  -e OLLAMA_MODEL=coder \
+  ${FORGE_OS_CORS_ORIGIN:+-e FORGE_OS_CORS_ORIGIN="$FORGE_OS_CORS_ORIGIN"} \
+  ${FORGE_OS_API_TOKEN:+-e FORGE_OS_API_TOKEN="$FORGE_OS_API_TOKEN"} \
+  xecutr >/dev/null
+
+sleep 3
+
+# ------------------------------------------------------------------- verify
+log "Checking"
+curl -fsS http://127.0.0.1:8080/api/health || echo "  (health check failed)"
+echo
+curl -fsS -o /dev/null -w "  http://127.0.0.1:8080/  -> HTTP %{http_code}\n" http://127.0.0.1:8080/ || true
+curl -fsS -o /dev/null -w "  http://127.0.0.1:8080/api/providers -> HTTP %{http_code}\n" http://127.0.0.1:8080/api/providers || true
+
+cat <<DONE
+
+==> Done.
+    Open http://<your-server-ip>:8080 — that is the xecutr-app front-end, with
+    /api/* still answered by this server and your Ollama model behind it.
+
+    Re-run this same command any time the front-end or the API changes.
+    Logs: /root/front.log (front-end), docker logs xecutr (API).
+DONE
