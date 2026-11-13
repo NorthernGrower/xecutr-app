@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth-middleware";
 import { spendTrialTurn } from "@/lib/trial-quota.server";
 import { providerById } from "@/lib/providers";
-import { fetchHealth, fetchProviders, postChat, postUpload } from "@/lib/xecutr.server";
+import { fetchHealth, fetchProviders, forwardableKeys, postChat, postUpload } from "@/lib/xecutr.server";
 
 const MAX_TURN_CHARS = 60000;
 const MAX_MESSAGE_CHARS = 7800; // the gateway accepts 8k per message
@@ -133,14 +133,14 @@ export const streamTurn = createServerFn({ method: "POST" })
       files,
       rea: uploads.length > 0,
       uploads,
-      keys: anonymous ? {} : data.keys || {},
+      keys: anonymous ? {} : forwardableKeys(data.keys || {}),
     });
   });
 
 /** The gateway's provider catalogue with its live model lists, for the picker. */
 export const xecutrCatalog = createServerFn({ method: "POST" })
   .validator(z.object({ keys: z.record(z.string().max(32), z.string().max(600)).optional() }).optional())
-  .handler(({ data }) => fetchProviders(data?.keys));
+  .handler(({ data }) => fetchProviders(forwardableKeys(data?.keys)));
 
 /** Gateway liveness (GET /api/health). */
 export const xecutrHealth = createServerFn({ method: "GET" }).handler(() => fetchHealth());

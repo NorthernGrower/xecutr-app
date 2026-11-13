@@ -23,6 +23,12 @@ const readBase64 = (file) =>
     reader.readAsDataURL(file);
   });
 
+/** One turn carries at most the pinned provider's own key — never the whole store. */
+const keysFor = (providerId) => {
+  const all = readKeys();
+  return providerId && all[providerId] ? { [providerId]: all[providerId] } : {};
+};
+
 const labelFor = (settings, providers) => {
   const provider = providers.find((p) => p.id === settings.providerId);
   return {
@@ -189,7 +195,7 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
         providerId: settingsRef.current.providerId,
         model: settingsRef.current.model,
         projectId: projectRef.current || null,
-        keys: readKeys(),
+        keys: keysFor(settingsRef.current.providerId),
       });
     }
   }, [pendingPrompt, isLoading, send]);
@@ -246,7 +252,7 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
       providerId: settings.providerId,
       model: settings.model,
       projectId: projectId || null,
-      keys: readKeys(),
+      keys: keysFor(settings.providerId),
     });
     savedRef.current?.();
   };

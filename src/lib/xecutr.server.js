@@ -10,12 +10,33 @@ const DEFAULT_BASE = "http://31.220.86.31:8080";
 
 export const apiBase = () => (secrets.get("XECUTR_API_URL") || DEFAULT_BASE).replace(/\/+$/, "");
 
+/** Nothing secret is attached unless the hop is encrypted (or running locally). */
+const safeTransport = () => {
+  const base = apiBase();
+  return base.startsWith("https://") || isLocal(base);
+};
+
 const authHeaders = () => {
-  const token = secrets.get("XECUTR_API_TOKEN");
+  const token = safeTransport() ? secrets.get("XECUTR_API_TOKEN") : undefined;
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
 const headers = () => ({ "Content-Type": "application/json", ...authHeaders() });
+
+const isLocal = (base) => /^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(base);
+
+/**
+ * A caller's provider keys may only travel over TLS. The gateway default is a
+ * plain-http address, so anything sent there would be readable on the wire.
+ */
+export const forwardableKeys = (keys) =>
+  safeTransport() && keys && typeof keys === "object" ? keys : {};
+
+/** Gateway and upstream errors can quote request bodies, so strip key-shaped text. */
+export const redact = (text = "") =>
+  String(text)
+    .replace(/\b(sk-|gsk_|ghp_|gho_|github_pat_|hf_|AIza|Bearer\s+)[A-Za-z0-9._-]{6,}/g, "$1[redacted]")
+    .replace(/\b[A-Za-z0-9_-]{48,}\b/g, "[redacted]");
 
 /** `keys` scopes the catalogue to a caller's own provider keys for this call only. */
 export async function fetchProviders(keys) {
@@ -57,7 +78,9 @@ export async function postChat(body) {
 
   const detail = await res.text().catch(() => "");
   throw Object.assign(
-    new Error(`The xecutr gateway answered ${res.status}${detail ? `: ${detail.slice(0, 300)}` : ""}`),
+    new Error(
+      `The xecutr gateway answered ${res.status}${detail ? `: ${redact(detail).slice(0, 300)}` : ""}`,
+    ),
     { status: 502 },
   );
 }

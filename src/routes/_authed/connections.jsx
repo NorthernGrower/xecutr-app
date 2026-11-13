@@ -103,8 +103,8 @@ function ProviderRow({ provider }) {
         </button>
       </div>
       <p className="mt-2 font-body text-[11px] leading-relaxed text-muted-foreground">
-        Stored on this device only. It is forwarded once per request and never kept on our servers.
-        Each key carries its own provider limits.
+        Stored on this device only. It is forwarded once per request, and only over an encrypted
+        connection, and never kept on our servers. Each key carries its own provider limits.
       </p>
     </Panel>
   );
