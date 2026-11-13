@@ -29,7 +29,15 @@ const digest = async (value) => {
  * Returns false once the allowance is spent.
  */
 export const spendTrialTurn = async (context) => {
-  const admin = context.getBase44().asServiceRole;
+  let admin;
+  try {
+    admin = context.getBase44().asServiceRole;
+  } catch {
+    // The platform adds its per-request service credential at its edge. A copy
+    // served from the app's own host arrives without one, so the allowance
+    // cannot be counted there — the turn is allowed rather than blocking.
+    return true;
+  }
   const day = dayKey();
   const ip_hash = await digest(`${clientAddress() || "unknown"}:${day}`);
 

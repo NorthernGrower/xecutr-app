@@ -2,6 +2,23 @@ import { createClientFromRequest, getAccessToken } from "@base44/sdk";
 import { createMiddleware } from "@tanstack/react-start";
 import { getRequest, setResponseStatus } from "@tanstack/react-start/server";
 
+// The platform stamps the app id on every request at its edge. A copy served
+// from the app's own host arrives through its own proxy instead, so the header
+// is filled in here (from the caller's X-App-Id, or the app id this build was
+// made for) rather than failing every turn with "Base44-App-Id header is
+// required". createClientFromRequest only reads headers, so the stand-in keeps
+// the request body untouched.
+const APP_ID = import.meta.env.VITE_BASE44_APP_ID;
+
+const withPlatformHeaders = (request) => {
+  if (!request || request.headers.get("Base44-App-Id")) return request;
+  const appId = request.headers.get("X-App-Id") || APP_ID;
+  if (!appId) return request;
+  const headers = new Headers(request.headers);
+  headers.set("Base44-App-Id", appId);
+  return { headers };
+};
+
 // Both middlewares hand handlers the same lazy `context.getBase44()`: a
 // function, not the client, because the client needs the platform headers and
 // a handler that never touches Base44 must still answer without them. The
@@ -9,7 +26,9 @@ import { getRequest, setResponseStatus } from "@tanstack/react-start/server";
 // visitor's Authorization header makes the client act as that visitor.
 const withGetBase44 = (next, request = getRequest()) => {
   let client;
-  return next({ context: { getBase44: () => (client ??= createClientFromRequest(request)) } });
+  return next({
+    context: { getBase44: () => (client ??= createClientFromRequest(withPlatformHeaders(request))) },
+  });
 };
 
 // Applied to every server function by src/start.js: sends the visitor's Base44
