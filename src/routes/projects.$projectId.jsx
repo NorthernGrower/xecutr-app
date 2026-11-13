@@ -50,6 +50,7 @@ function SignInPrompt({ onSignIn }) {
 
 function ProjectWorkspace() {
   const { projectId } = Route.useParams();
+  const { mode: searchMode } = Route.useSearch();
   const { user, isLoadingAuth, navigateToLogin } = useAuth();
 
   const [project, setProject] = useState(null);
@@ -219,7 +220,7 @@ function ProjectWorkspace() {
               pendingPrompt={pendingPrompt}
               onSaved={reload}
               onOpenFile={openFile}
-              mode={Route.useSearch().mode || "build"}
+              mode={searchMode || "build"}
             />
           </div>
 
