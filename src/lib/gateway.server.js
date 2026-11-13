@@ -1,9 +1,25 @@
 import { spendTrialTurn } from "@/lib/trial-quota.server";
-import { forwardableKeys } from "@/lib/xecutr.server";
+import { fetchProviders, forwardableKeys } from "@/lib/xecutr.server";
 
 const MAX_MESSAGE_CHARS = 7800; // the model server accepts 8k per message
 const MAX_CONTEXT_FILES = 40;
 const MAX_CONTEXT_CHARS = 300000;
+
+/**
+ * The gateway runs one local model server, so a turn can only use a model that
+ * server actually has. A pin for some other provider, or a model name that is
+ * no longer installed, falls back to the server's own default instead of
+ * failing the turn with an upstream 404.
+ */
+const LOCAL_PROVIDERS = new Set(["", "gateway", "ollama"]);
+
+const localModel = async (data) => {
+  const wanted = data.model || "";
+  if (!wanted || !LOCAL_PROVIDERS.has(data.providerId || "")) return "";
+  const catalogue = await fetchProviders({}).catch(() => null);
+  const ollama = (catalogue?.providers || []).find((p) => p.id === "ollama");
+  return Array.isArray(ollama?.models) && ollama.models.includes(wanted) ? wanted : "";
+};
 
 /** Text excerpts ride along inside the last prompt; uploads are referenced by id. */
 const withAttachments = (messages, attachments) => {
@@ -109,7 +125,7 @@ export async function buildTurn(data, context) {
     messages: withAttachments(messages, attachments),
     target: "Web app",
     providerId: data.providerId || "",
-    model: data.model || "",
+    model: await localModel(data),
     allowPaid: false,
     memory,
     files,
