@@ -29,7 +29,7 @@ APP_DIR="${APP_DIR:-/root/xecutr-app}"
 FRONT_PORT="${FRONT_PORT:-8082}"
 # The live Base44 deployment the server's address mirrors. Override it (e.g.
 # FRONTEND_URL= bash deploy/frontend.sh) to fall back to the local build.
-FRONTEND_URL="${FRONTEND_URL:-https://xecutr.base44.app}"
+FRONTEND_URL="${FRONTEND_URL:-https://xecutr.cloud}"
 APP_REPO="https://github.com/NorthernGrower/xecutr-app.git"
 
 log() { printf '\n==> %s\n' "$*"; }

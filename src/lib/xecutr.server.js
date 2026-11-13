@@ -1,12 +1,14 @@
 import { secrets } from "base44:runtime";
 
 /**
- * Server-side client for the Xecutr gateway (see API.md in NorthernGrower/xecutr).
- * Calls are server-to-server, so browser CORS never applies and provider keys
- * stay on the deployment. Point it somewhere else with the XECUTR_API_URL
- * secret, and set XECUTR_API_TOKEN when the deployment has FORGE_OS_API_TOKEN.
+ * Server-side client for the Xecutr gateway, which runs on the same server that
+ * hosts the app (deploy/gateway/). Calls are server-to-server, so browser CORS
+ * never applies and provider keys stay on the deployment. The domain is served
+ * over HTTPS with real certificates, so provider keys ARE forwardable. Point it
+ * somewhere else with the XECUTR_API_URL secret, and set XECUTR_API_TOKEN when
+ * the deployment has FORGE_OS_API_TOKEN.
  */
-const DEFAULT_BASE = "http://31.220.86.31:8080";
+const DEFAULT_BASE = "https://xecutr.cloud";
 
 export const apiBase = () => (secrets.get("XECUTR_API_URL") || DEFAULT_BASE).replace(/\/+$/, "");
 
