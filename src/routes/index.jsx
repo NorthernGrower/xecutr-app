@@ -161,7 +161,7 @@ function WorkspaceEntry() {
 
           {user && (
             <section className="mx-auto mt-12 max-w-5xl">
-              <div className="flex items-end justify-between">
+              <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
                 <h2 className="font-display text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
                   recent projects
                 </h2>

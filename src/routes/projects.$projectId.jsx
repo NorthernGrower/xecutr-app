@@ -164,7 +164,7 @@ function ProjectWorkspace() {
               {files.length} files
             </span>
 
-            <div className="ml-auto flex items-center gap-1">
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
               <GitHubRepoButton project={project} onSaved={reload} />
               <button
                 type="button"

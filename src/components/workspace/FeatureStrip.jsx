@@ -5,16 +5,19 @@ const FEATURES = [
   { title: "no limits on your ideas", body: "Every project keeps its files and its own memory." },
 ];
 
+/** Column rules: stacked on phones, two up on tablets, four across on desktop. */
+const BORDERS = [
+  "px-5 py-5",
+  "px-5 py-5 border-t border-white/10 sm:border-l sm:border-t-0",
+  "px-5 py-5 border-t border-white/10 lg:border-l lg:border-t-0",
+  "px-5 py-5 border-t border-white/10 sm:border-l lg:border-t-0",
+];
+
 export default function FeatureStrip() {
   return (
     <div className="grid grid-cols-1 border-t border-white/10 sm:grid-cols-2 lg:grid-cols-4">
       {FEATURES.map((f, i) => (
-        <div
-          key={f.title}
-          className={`px-5 py-5 ${i > 0 ? "border-t border-white/10 lg:border-l lg:border-t-0" : ""} ${
-            i === 2 ? "sm:border-t sm:border-white/10 lg:border-t-0" : ""
-          }`}
-        >
+        <div key={f.title} className={BORDERS[i]}>
           <p className="font-display text-[12px] font-semibold uppercase tracking-[0.16em] text-white">
             {f.title}
           </p>
