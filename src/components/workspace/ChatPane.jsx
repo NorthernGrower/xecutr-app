@@ -7,6 +7,7 @@ import ModelPicker from "@/components/workspace/ModelPicker";
 import PromptHistory from "@/components/workspace/PromptHistory";
 import useXecutrChat from "@/hooks/use-xecutr-chat";
 import { attachArtifact, xecutrCatalog } from "@/lib/chat";
+import { mergeCatalog, modelLabel } from "@/lib/catalog";
 import { isTextLike, readKeys, readSettings, saveSettings } from "@/lib/providers";
 import { fileBlocks, textOfMessage } from "@/lib/text-segments";
 import { addTrialMessage } from "@/lib/trial";
@@ -22,11 +23,11 @@ const readBase64 = (file) =>
     reader.readAsDataURL(file);
   });
 
-const labelFor = (settings, catalog) => {
-  const provider = (catalog?.providers || []).find((p) => p.id === settings.providerId);
+const labelFor = (settings, providers) => {
+  const provider = providers.find((p) => p.id === settings.providerId);
   return {
-    provider: provider?.id || "xecutr gateway",
-    model: settings.model || provider?.defaultModel || "auto",
+    provider: provider?.label || "xecutr gateway",
+    model: provider ? modelLabel(provider, settings.model) : "auto",
   };
 };
 
@@ -42,6 +43,10 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
   const [catalog, setCatalog] = useState({ providers: [] });
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [notice, setNotice] = useState(null);
+
+  // Gateway catalogue plus the shipped provider/models list, so every free
+  // model (OVH included) is pickable even before the catalogue answers.
+  const providers = useMemo(() => mergeCatalog(catalog), [catalog]);
 
   const projectRef = useRef(projectId);
   const settingsRef = useRef(settings);
@@ -297,7 +302,7 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
             onOpenFile={onOpenFile}
             message={
               message.role === "assistant" && !message.provider
-                ? { ...message, ...labelFor(settings, catalog) }
+                ? { ...message, ...labelFor(settings, providers) }
                 : message
             }
           />
@@ -355,7 +360,7 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
               </label>
               <PromptHistory prompts={promptHistory} onPick={setPrompt} />
               <ModelPicker
-                catalog={catalog}
+                providers={providers}
                 value={settings}
                 onChange={chooseModel}
                 onRefresh={loadCatalog}
