@@ -101,6 +101,16 @@ else
     || fail "Cloning failed. Is the repo public? Check: https://github.com/NorthernGrower/xecutr-app"
 fi
 
+# ------------------------------------------------------------------ the gateway
+# The model gateway container is built from its repo; if the server was cleaned,
+# fetch it again. It is what the Base44 app calls for chat.
+GATEWAY_REPO="https://github.com/NorthernGrower/xecutr.git"
+if [ ! -d "$API_DIR/.git" ]; then
+  log "Fetching the gateway repo into $API_DIR"
+  git clone --depth 1 "$GATEWAY_REPO" "$API_DIR" \
+    || fail "Could not fetch the gateway repo. Check: https://github.com/NorthernGrower/xecutr"
+fi
+
 # --------------------------------------------------------------------- build
 cd "$APP_DIR"
 log "Installing dependencies (first run takes a few minutes)"
