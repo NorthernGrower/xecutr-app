@@ -12,7 +12,6 @@
 #
 # Optional environment:
 #   APP_DIR=/root/xecutr-app     where the front-end repo lives
-#   API_DIR=/root/xecutr         where the API repo lives
 #   FRONT_PORT=8082              the port the front-end runs on (loopback only)
 #   FORGE_OS_CORS_ORIGIN=...     passed through to the API container
 #   FORGE_OS_API_TOKEN=...       passed through to the API container
@@ -27,7 +26,6 @@ set -euo pipefail
 exec > >(tee /root/xecutr-install.log) 2>&1
 
 APP_DIR="${APP_DIR:-/root/xecutr-app}"
-API_DIR="${API_DIR:-/root/xecutr}"
 FRONT_PORT="${FRONT_PORT:-8082}"
 # The live Base44 deployment the server's address mirrors. Override it (e.g.
 # FRONTEND_URL= bash deploy/frontend.sh) to fall back to the local build.
@@ -51,9 +49,6 @@ if [ "${1:-}" = "diag" ]; then
   echo
   echo "-- front-end app dir ($APP_DIR) --"
   git -C "$APP_DIR" log --oneline -3 2>&1 || echo "  (missing)"
-  echo
-  echo "-- API repo ($API_DIR) --"
-  git -C "$API_DIR" log --oneline -3 2>&1 || echo "  (missing)"
   echo
   echo "-- front-end log (/root/front.log, last 20 lines) --"
   tail -n 20 /root/front.log 2>/dev/null || echo "  (no log yet)"
@@ -102,18 +97,14 @@ else
 fi
 
 # ------------------------------------------------------------------ the gateway
-# The model gateway container is built from its repo; if the server was cleaned,
-# fetch it again. It is what the Base44 app calls for chat. That repo is
-# PRIVATE, so an anonymous clone fails — pass a tokenized URL or clone it
-# into $API_DIR yourself first, then re-run this script.
-#
-#   curl -fsSL .../frontend.sh | GATEWAY_REPO='https://<token>@github.com/NorthernGrower/xecutr.git' bash
-#
-GATEWAY_REPO="${GATEWAY_REPO:-https://github.com/NorthernGrower/xecutr.git}"
-if [ ! -d "$API_DIR/.git" ]; then
-  log "Fetching the gateway repo into $API_DIR"
-  git clone --depth 1 "$GATEWAY_REPO" "$API_DIR" \
-    || fail "Could not fetch the gateway repo ($GATEWAY_REPO). It is private, so an anonymous clone is refused. Pass GATEWAY_REPO='https://<token>@github.com/NorthernGrower/xecutr.git' with a fine-grained PAT that can read it, clone it into $API_DIR yourself first, or make the repo public."
+# The model gateway is built from THIS repo (deploy/gateway/) — no second repo
+# is involved any more. It fronts Ollama and forwards app traffic to the build.
+GATEWAY_DIR="${APP_DIR}/deploy/gateway"
+log "Building the gateway image from ${GATEWAY_DIR}"
+docker build -f "${GATEWAY_DIR}/Dockerfile" -t xecutr "${APP_DIR}" \
+  || fail "Gateway image build failed."
+if ! docker images xecutr --format '{{.Repository}}' | grep -q '^xecutr$'; then
+  fail "The gateway image was not built. Is Docker installed and running?"
 fi
 
 # --------------------------------------------------------------------- build
@@ -200,14 +191,10 @@ UNIT
   fi
 fi
 
-# ------------------------------------------------------------ rewire the API
-[ -d "$API_DIR/.git" ] || fail "Missing $API_DIR — clone NorthernGrower/xecutr there first."
-cd "$API_DIR"
-log "Updating and rebuilding the API"
-git pull --ff-only >/dev/null 2>&1 || true
-docker build -t xecutr .
-
-log "Restarting the API with the front-end in front"
+# ------------------------------------------------------------ start the gateway
+# The gateway image was built from this repo above — nothing to clone or
+# rebuild from a second repo. Run it on public port 8080 with Ollama behind it.
+log "Restarting the gateway with the front-end behind it"
 docker stop xecutr >/dev/null 2>&1 || true
 docker rm xecutr >/dev/null 2>&1 || true
 docker run -d --name xecutr --restart unless-stopped --network host \
@@ -215,7 +202,7 @@ docker run -d --name xecutr --restart unless-stopped --network host \
   -e FRONTEND_URL="$FRONTEND_URL" \
   -e FRONTEND_ORIGIN="http://127.0.0.1:$FRONT_PORT" \
   -e OLLAMA_BASE_URL=http://127.0.0.1:11434/v1 \
-  -e OLLAMA_MODEL=coder \
+  -e OLLAMA_MODEL="${OLLAMA_MODEL:-coder}" \
   ${FORGE_OS_CORS_ORIGIN:+-e FORGE_OS_CORS_ORIGIN="$FORGE_OS_CORS_ORIGIN"} \
   ${FORGE_OS_API_TOKEN:+-e FORGE_OS_API_TOKEN="$FORGE_OS_API_TOKEN"} \
   xecutr >/dev/null
