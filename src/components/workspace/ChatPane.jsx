@@ -68,11 +68,12 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
   const loadCatalog = useCallback(async () => {
     setLoadingCatalog(true);
     try {
+      // The shipped catalogue stands in when the gateway's live one is unreachable,
+      // so a catalogue failure is never worth an error banner.
       const next = await xecutrCatalog({ data: { keys: readKeys() } });
-      setCatalog(next);
-      if (next?.error) setNotice(next.error);
+      if (next?.providers?.length) setCatalog(next);
     } catch {
-      setNotice("The provider catalogue could not be loaded.");
+      /* keep the shipped list */
     } finally {
       setLoadingCatalog(false);
     }

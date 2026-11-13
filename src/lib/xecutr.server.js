@@ -38,6 +38,20 @@ export const redact = (text = "") =>
     .replace(/\b(sk-|gsk_|ghp_|gho_|github_pat_|hf_|AIza|Bearer\s+)[A-Za-z0-9._-]{6,}/g, "$1[redacted]")
     .replace(/\b[A-Za-z0-9_-]{48,}\b/g, "[redacted]");
 
+/**
+ * A refusal that never reached the gateway means the address itself is blocked
+ * from the deployment host (plain http on port 8080 is not allowed), so say so
+ * instead of leaving a bare status code.
+ */
+const refusal = (status, detail = "") => {
+  const snippet = redact(detail).trim().slice(0, 140);
+  const hint =
+    status === 401 || status === 403
+      ? " The request was refused before it reached the gateway — it has to be served over HTTPS on port 443 to be reachable from this app."
+      : "";
+  return `the gateway answered ${status}${snippet ? ` — ${snippet}` : ""}.${hint}`;
+};
+
 /** `keys` scopes the catalogue to a caller's own provider keys for this call only. */
 export async function fetchProviders(keys) {
   try {
@@ -47,7 +61,10 @@ export async function fetchProviders(keys) {
       headers: headers(),
       ...(scoped ? { body: JSON.stringify({ keys }) } : {}),
     });
-    if (!res.ok) return { providers: [], readyCount: 0, error: `the gateway answered ${res.status}` };
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { providers: [], readyCount: 0, error: refusal(res.status, detail) };
+    }
     const body = await res.json();
     return {
       providers: Array.isArray(body?.providers) ? body.providers : [],
@@ -77,12 +94,7 @@ export async function postChat(body) {
   }
 
   const detail = await res.text().catch(() => "");
-  throw Object.assign(
-    new Error(
-      `The xecutr gateway answered ${res.status}${detail ? `: ${redact(detail).slice(0, 300)}` : ""}`,
-    ),
-    { status: 502 },
-  );
+  throw Object.assign(new Error(refusal(res.status, detail)), { status: 502 });
 }
 
 /** POST /api/uploads — raw bytes, referenced by id in later chat turns. */
@@ -108,7 +120,7 @@ export async function postUpload(bytes, name) {
 export async function fetchHealth() {
   try {
     const res = await fetch(`${apiBase()}/api/health`, { headers: headers() });
-    if (!res.ok) return { ok: false, error: `the gateway answered ${res.status}` };
+    if (!res.ok) return { ok: false, error: refusal(res.status) };
     const body = await res.json();
     return { ok: Boolean(body?.ok), name: body?.name || "xecutr", time: body?.time || null };
   } catch (err) {
