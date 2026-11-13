@@ -66,6 +66,9 @@ fi
 # Rebuild whenever source changed at all (dist/ is not tracked).
 if printf '%s\n' "${changed}" | grep -Eq '^(src|public|package\.json|vite\.config\.js|tailwind\.config\.js|index\.css)'; then
     log "Rebuilding"
+    # The app's Base44 identity is baked in at build time (public client-side values).
+    VITE_BASE44_APP_ID="${VITE_BASE44_APP_ID:-6af5fbfbeb8a5b4111b2a97d}" \
+    VITE_BASE44_FUNCTIONS_VERSION="${VITE_BASE44_FUNCTIONS_VERSION:-prod}" \
     npm run build
 fi
 

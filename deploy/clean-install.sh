@@ -45,6 +45,9 @@ git clone https://github.com/NorthernGrower/xecutr-app.git "${APP_DIR}" \
   || fail "Cloning failed. Check: https://github.com/NorthernGrower/xecutr-app"
 cd "${APP_DIR}"
 npm ci --no-audit --no-fund || { log "npm ci failed — trying npm install"; npm install --no-audit --no-fund; }
+# The app's Base44 identity is baked in at build time (public client-side values).
+VITE_BASE44_APP_ID="${VITE_BASE44_APP_ID:-6af5fbfbeb8a5b4111b2a97d}" \
+VITE_BASE44_FUNCTIONS_VERSION="${VITE_BASE44_FUNCTIONS_VERSION:-prod}" \
 npm run build || fail "The build failed. Paste the lines above this message and I'll fix the cause."
 
 log "3/4 Installing the two services (app + public proxy, kept alive across reboots)"
