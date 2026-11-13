@@ -103,12 +103,17 @@ fi
 
 # ------------------------------------------------------------------ the gateway
 # The model gateway container is built from its repo; if the server was cleaned,
-# fetch it again. It is what the Base44 app calls for chat.
-GATEWAY_REPO="https://github.com/NorthernGrower/xecutr.git"
+# fetch it again. It is what the Base44 app calls for chat. That repo is
+# PRIVATE, so an anonymous clone fails — pass a tokenized URL or clone it
+# into $API_DIR yourself first, then re-run this script.
+#
+#   curl -fsSL .../frontend.sh | GATEWAY_REPO='https://<token>@github.com/NorthernGrower/xecutr.git' bash
+#
+GATEWAY_REPO="${GATEWAY_REPO:-https://github.com/NorthernGrower/xecutr.git}"
 if [ ! -d "$API_DIR/.git" ]; then
   log "Fetching the gateway repo into $API_DIR"
   git clone --depth 1 "$GATEWAY_REPO" "$API_DIR" \
-    || fail "Could not fetch the gateway repo. Check: https://github.com/NorthernGrower/xecutr"
+    || fail "Could not fetch the gateway repo ($GATEWAY_REPO). It is private, so an anonymous clone is refused. Pass GATEWAY_REPO='https://<token>@github.com/NorthernGrower/xecutr.git' with a fine-grained PAT that can read it, clone it into $API_DIR yourself first, or make the repo public."
 fi
 
 # --------------------------------------------------------------------- build
