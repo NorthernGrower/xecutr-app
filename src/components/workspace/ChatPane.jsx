@@ -6,12 +6,21 @@ import MessageBubble from "@/components/workspace/MessageBubble";
 import ModelPicker from "@/components/workspace/ModelPicker";
 import PromptHistory from "@/components/workspace/PromptHistory";
 import useXecutrChat from "@/hooks/use-xecutr-chat";
-import { xecutrCatalog } from "@/lib/chat";
-import { isTextLike, readSettings, saveSettings } from "@/lib/providers";
+import { attachArtifact, xecutrCatalog } from "@/lib/chat";
+import { isTextLike, readKeys, readSettings, saveSettings } from "@/lib/providers";
 import { fileBlocks, textOfMessage } from "@/lib/text-segments";
 import { addTrialMessage } from "@/lib/trial";
 
 const MAX_UPLOAD = 25 * 1024 * 1024;
+const MAX_INSPECT = 8 * 1024 * 1024;
+
+const readBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+    reader.onerror = () => reject(new Error("That file could not be read."));
+    reader.readAsDataURL(file);
+  });
 
 const labelFor = (settings, catalog) => {
   const provider = (catalog?.providers || []).find((p) => p.id === settings.providerId);
@@ -48,7 +57,7 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
   const loadCatalog = useCallback(async () => {
     setLoadingCatalog(true);
     try {
-      const next = await xecutrCatalog();
+      const next = await xecutrCatalog({ data: { keys: readKeys() } });
       setCatalog(next);
       if (next?.error) setNotice(next.error);
     } catch {
@@ -175,6 +184,7 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
         providerId: settingsRef.current.providerId,
         model: settingsRef.current.model,
         projectId: projectRef.current || null,
+        keys: readKeys(),
       });
     }
   }, [pendingPrompt, isLoading, send]);
@@ -188,8 +198,15 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
     try {
       const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
       const content = isTextLike(file.name) && file.size < 200000 ? await file.text() : "";
-      setAttachments([{ name: file.name, file_uri, content }]);
-      setNotice(null);
+      let uploadId = null;
+      if (!content && file.size <= MAX_INSPECT) {
+        // Artifacts go to the gateway's upload store so its tools can inspect them.
+        const data = await readBase64(file);
+        const ref = await attachArtifact({ data: { name: file.name, data } });
+        uploadId = ref?.id || null;
+      }
+      setAttachments([{ name: file.name, file_uri, content, uploadId }]);
+      setNotice(content || uploadId || file.size > MAX_INSPECT ? null : "This file is attached, but too large to inspect.");
     } catch {
       setNotice("Upload failed — try again.");
     }
@@ -198,7 +215,11 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
   const submit = async () => {
     const text = prompt.trim();
     if (!text || isLoading) return;
-    const payload = attachments.map((a) => ({ name: a.name, content: a.content || "" }));
+    const payload = attachments.map((a) => ({
+      name: a.name,
+      content: a.content || "",
+      uploadId: a.uploadId || null,
+    }));
 
     if (!trial && projectId) {
       await base44.entities.Message.create({
@@ -220,6 +241,7 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
       providerId: settings.providerId,
       model: settings.model,
       projectId: projectId || null,
+      keys: readKeys(),
     });
     savedRef.current?.();
   };

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Check, ExternalLink, Loader2 } from "lucide-react";
 import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
 import Panel from "@/components/workspace/Panel";
-import { discoverModels } from "@/lib/chat";
+import { discoverModels, xecutrHealth } from "@/lib/chat";
 import GitHubConnectionCard from "@/components/workspace/GitHubConnectionCard";
 import {
   PROVIDERS,
@@ -110,6 +110,36 @@ function ProviderRow({ provider }) {
   );
 }
 
+function GatewayStatus() {
+  const [state, setState] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    xecutrHealth()
+      .then((row) => alive && setState(row))
+      .catch(() => alive && setState({ ok: false }));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const online = Boolean(state?.ok);
+  return (
+    <div className="mt-6 flex items-center gap-2 rounded-sm border border-white/10 bg-white/[0.02] px-3 py-2">
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${state === null ? "bg-muted-foreground" : online ? "bg-emerald-400" : "bg-red-400"}`}
+      />
+      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+        {state === null
+          ? "checking the gateway"
+          : online
+            ? `${state.name || "xecutr"} gateway online`
+            : "gateway unreachable"}
+      </span>
+    </div>
+  );
+}
+
 function ConnectionsPage() {
   return (
     <div className="min-h-screen bg-background">
@@ -120,9 +150,11 @@ function ConnectionsPage() {
           your providers
         </h1>
         <p className="mt-3 max-w-xl font-body text-[13px] leading-relaxed text-muted-foreground">
-          Turns start on the keyless gateway. Add your own keys to route to a specific provider and
+          Turns run through the xecutr gateway. Add your own keys to route to a specific provider and
           model, and the picker in the chat fills with the models that provider reports.
         </p>
+
+        <GatewayStatus />
 
         <div className="mt-8 space-y-3">
           {PROVIDERS.map((provider) => (

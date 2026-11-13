@@ -33,7 +33,7 @@ export default function useXecutrChat({ initialMessages = [], onFiles, onFinish 
   live.current.onFiles = onFiles;
   live.current.onFinish = onFinish;
 
-  const send = useCallback(async ({ text, providerId = "", model = "", attachments = [], projectId = null }) => {
+  const send = useCallback(async ({ text, providerId = "", model = "", attachments = [], projectId = null, keys = null }) => {
     if (live.current.loading) return;
 
     const userMessage = { id: nextId(), role: "user", parts: [{ type: "text", content: text }] };
@@ -54,7 +54,9 @@ export default function useXecutrChat({ initialMessages = [], onFiles, onFinish 
     let route = null;
 
     try {
-      const response = await streamTurn({ data: { messages: history, projectId, providerId, model, attachments } });
+      const response = await streamTurn({
+        data: { messages: history, projectId, providerId, model, attachments, keys },
+      });
 
       await readAgentStream(response, (event) => {
         if (!event || typeof event !== "object") return;
