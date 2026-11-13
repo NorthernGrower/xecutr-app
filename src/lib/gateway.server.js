@@ -27,6 +27,14 @@ const withAttachments = (messages, attachments) => {
 };
 
 /**
+ * Appended to the last prompt in plan mode: think, don't touch. It rides in the
+ * user text itself rather than a system message, so the model server honours it
+ * whatever role handling it implements.
+ */
+const PLAN_DIRECTIVE =
+  "\n\n[MODE: PLAN ONLY] Do not write, create, modify or delete any files, and do not run any tool that changes anything. Study the conversation and the project files provided, then reply with the plan you would follow: what you would build or change, which files are involved, and the order of work. Building starts only after the user approves the plan.";
+
+/**
  * Assembles one turn for this app's own model server: the caller check, the
  * conversation, attachments, and the project's files and memory notes.
  * Returns the body for the server's POST /api/chat.
@@ -85,6 +93,15 @@ export async function buildTurn(data, context) {
     } catch {
       files = [];
       memory = [];
+    }
+  }
+
+  if (data.mode === "plan") {
+    const last = messages[messages.length - 1];
+    if (last && last.role === "user") {
+      last.text = last.text.slice(0, Math.max(0, MAX_MESSAGE_CHARS - PLAN_DIRECTIVE.length)) + PLAN_DIRECTIVE;
+    } else {
+      messages.push({ role: "user", text: PLAN_DIRECTIVE });
     }
   }
 

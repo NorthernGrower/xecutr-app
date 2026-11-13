@@ -46,6 +46,7 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
   const [prompt, setPrompt] = useState("");
   const [attachments, setAttachments] = useState([]);
   const [settings, setSettings] = useState({ providerId: "", model: "" });
+  const [mode, setMode] = useState("build");
   const [catalog, setCatalog] = useState({ providers: [] });
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -60,10 +61,12 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
   const lastPromptRef = useRef("");
   const sentPending = useRef(false);
   const endRef = useRef(null);
+  const modeRef = useRef("build");
 
   projectRef.current = projectId;
   settingsRef.current = settings;
   savedRef.current = onSaved;
+  modeRef.current = mode;
 
   const loadCatalog = useCallback(async () => {
     setLoadingCatalog(true);
@@ -87,7 +90,8 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
   const writeFiles = useCallback(
     async (incoming) => {
       const pid = projectRef.current;
-      if (!pid || trial) return;
+      // A plan turn never writes, even if the model emits files anyway.
+      if (!pid || trial || modeRef.current === "plan") return;
 
       for (const file of incoming) {
         if (!file?.path) continue;
@@ -131,7 +135,8 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
       });
 
       // Fallback for replies that declared files inline instead of through a tool.
-      for (const block of fileBlocks(text)) {
+      // A plan turn never writes, even if the model emitted file blocks anyway.
+      for (const block of modeRef.current === "plan" ? [] : fileBlocks(text)) {
         const existing = await base44.entities.ProjectFile.filter(
           { project_id: pid, path: block.path },
           "-created_date",
@@ -197,9 +202,10 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
         model: settingsRef.current.model,
         projectId: projectRef.current || null,
         keys: keysFor(settingsRef.current.providerId),
+        mode,
       });
     }
-  }, [pendingPrompt, isLoading, send]);
+  }, [pendingPrompt, isLoading, send, mode]);
 
   const upload = async (file) => {
     if (!file) return;
@@ -254,6 +260,7 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
       model: settings.model,
       projectId: projectId || null,
       keys: keysFor(settings.providerId),
+      mode,
     });
     savedRef.current?.();
   };
@@ -355,6 +362,8 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
           onChange={setPrompt}
           onSubmit={submit}
           busy={isLoading}
+          mode={mode}
+          onModeChange={setMode}
           footer={
             <div className="flex items-center gap-2">
               <label className="cursor-pointer rounded-sm border border-white/10 p-1.5 text-muted-foreground transition hover:border-[#b0c4de]/40 hover:text-white">

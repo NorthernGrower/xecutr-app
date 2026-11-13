@@ -19,7 +19,7 @@ export default function useXecutrChat({ initialMessages = [], onFiles, onFinish 
   live.current.onFiles = onFiles;
   live.current.onFinish = onFinish;
 
-  const send = useCallback(async ({ text, providerId = "", model = "", attachments = [], projectId = null, keys = null }) => {
+  const send = useCallback(async ({ text, providerId = "", model = "", attachments = [], projectId = null, keys = null, mode = "build" }) => {
     if (live.current.loading) return;
 
     const userMessage = { id: nextId(), role: "user", parts: [{ type: "text", content: text }] };
@@ -36,7 +36,7 @@ export default function useXecutrChat({ initialMessages = [], onFiles, onFinish 
 
     try {
       const result = await ask({
-        data: { prompt: text, messages: history, projectId, providerId, model, attachments, keys },
+        data: { prompt: text, messages: history, projectId, providerId, model, attachments, keys, mode },
       });
 
       const reply = result?.text || "";

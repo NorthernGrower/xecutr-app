@@ -25,6 +25,8 @@ export const turnSchema = z.object({
   projectId: z.string().max(64).nullish(),
   providerId: z.string().max(64).nullish(),
   model: z.string().max(160).nullish(),
+  // "plan" asks for a plan and no file writes; "build" (the default) may build.
+  mode: z.enum(["plan", "build"]).optional(),
   attachments: z
     .array(
       z.object({
