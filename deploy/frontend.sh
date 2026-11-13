@@ -29,6 +29,9 @@ exec > >(tee /root/xecutr-install.log) 2>&1
 APP_DIR="${APP_DIR:-/root/xecutr-app}"
 API_DIR="${API_DIR:-/root/xecutr}"
 FRONT_PORT="${FRONT_PORT:-8082}"
+# The live Base44 deployment the server's address mirrors. Override it (e.g.
+# FRONTEND_URL= bash deploy/frontend.sh) to fall back to the local build.
+FRONTEND_URL="${FRONTEND_URL:-https://xecutr.base44.app}"
 APP_REPO="https://github.com/NorthernGrower/xecutr-app.git"
 
 log() { printf '\n==> %s\n' "$*"; }
@@ -194,6 +197,7 @@ docker stop xecutr >/dev/null 2>&1 || true
 docker rm xecutr >/dev/null 2>&1 || true
 docker run -d --name xecutr --restart unless-stopped --network host \
   -e PORT=8080 \
+  -e FRONTEND_URL="$FRONTEND_URL" \
   -e FRONTEND_ORIGIN="http://127.0.0.1:$FRONT_PORT" \
   -e OLLAMA_BASE_URL=http://127.0.0.1:11434/v1 \
   -e OLLAMA_MODEL=coder \
@@ -213,8 +217,9 @@ curl -fsS -o /dev/null -w "  http://127.0.0.1:8080/api/providers -> HTTP %{http_
 cat <<DONE
 
 ==> Done.
-    Open http://<your-server-ip>:8080 — that is the xecutr-app front-end, with
-    /api/* still answered by this server and your Ollama model behind it.
+    Open http://<your-server-ip>:8080 — it shows the live app
+    ($FRONTEND_URL), with /api/chat and the other gateway endpoints still
+    answered here, backed by your Ollama model.
 
     Re-run this same command any time the front-end or the API changes.
     Logs: /root/front.log (front-end), docker logs xecutr (API).
