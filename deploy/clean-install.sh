@@ -12,7 +12,7 @@
 #   1. Stops and deletes everything a previous deploy put on the server.
 #      Ollama and its models are NOT touched.
 #   2. Clones this repo fresh from GitHub and builds it.
-#   3. Serves it on port 8080 (public) via deploy/serve.js, under systemd so it
+#   3. Serves it on port 8080 (public) via deploy/serve.cjs, under systemd so it
 #      survives reboots.
 #
 # The app talks to Base44's backend. To put the local Ollama model behind
@@ -66,7 +66,7 @@ Description=Xecutr public proxy
 After=network.target
 [Service]
 WorkingDirectory=${APP_DIR}
-ExecStart=/usr/bin/node deploy/serve.js
+ExecStart=/usr/bin/node deploy/serve.cjs
 Environment=PORT=8080
 Environment=FRONT_ORIGIN=http://127.0.0.1:8082
 Restart=always
