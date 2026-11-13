@@ -1,20 +1,24 @@
 /**
  * Provider catalogue for the harness. Client-safe constants only.
  *
+ * Mirrors the Xecutr gateway's own catalogue (ollama, ovh, google, anthropic,
+ * groq, cerebras, zai, openrouter, mistral, llm7, github) so the picker still
+ * lists every free model when the gateway is slow or unreachable.
+ *
  * User keys never leave the browser except inside a single chat request; this
  * module only reads and writes the local per-device key store.
  */
 
 export const GATEWAY = {
   id: "gateway",
-  label: "keyless gateway",
+  label: "xecutr gateway",
   baseURL: null,
   defaultModel: "automatic",
   connect: "https://www.ovhcloud.com/en/public-cloud/ai-endpoints/",
   note: "Keyless. No signup needed — answers are routed by the shared gateway.",
 };
 
-/** Models the keyless gateway can be pinned to. "automatic" lets it choose. */
+/** Models the gateway can be pinned to. "automatic" lets it choose. */
 export const GATEWAY_MODELS = [
   { id: "automatic", label: "auto · best available" },
   { id: "gemini_3_8_flash", label: "Gemini 3.8 Flash" },
@@ -31,23 +35,39 @@ export const GATEWAY_MODEL_IDS = GATEWAY_MODELS.map((m) => m.id);
 
 export const PROVIDERS = [
   {
+    id: "ollama",
+    label: "Ollama (this server)",
+    baseURL: null,
+    defaultModel: "qwen2.5-coder:7b",
+    connect: "https://ollama.com",
+    free: true,
+    /** Pulled on the host that runs the gateway — no key, no quota. */
+    models: [
+      "coder:latest",
+      "qwen2.5-coder:7b",
+      "qwen2.5-coder:3b",
+      "huihui_ai/Qwen3.8-abliterated",
+      "llama3.2:3b",
+    ],
+  },
+  {
     id: "ovh",
-    label: "OVHcloud AI Endpoints",
+    label: "OVHcloud AI",
     baseURL: "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
-    defaultModel: "Qwen3.6-27B",
+    defaultModel: "gpt-oss-120b",
     connect: "https://endpoints.ai.cloud.ovh.com/",
     free: true,
     /** Free-tier endpoints, selectable with no key at all. */
     models: [
-      "Qwen3.6-27B",
-      "Qwen3.8-27B",
-      "Qwen3.5-397B-A17B",
-      "Qwen3.5-9B",
       "gpt-oss-120b",
       "gpt-oss-20b",
+      "Qwen2.5-VL-72B-Instruct",
+      "Qwen3.6-27B",
+      "Qwen3.5-9B",
+      "Qwen3.8-27B",
+      "Qwen3.5-397B-A17B",
       "Mistral-Small-3.2-24B-Instruct-2506",
       "Meta-Llama-3_3-70B-Instruct",
-      "Qwen2.5-VL-72B-Instruct",
       "Meta-Llama-3_1-70B-Instruct",
       "Meta-Llama-3_1-8B-Instruct",
       "Mistral-Nemo-Instruct-2407",
@@ -58,53 +78,100 @@ export const PROVIDERS = [
     ],
   },
   {
-    id: "gemini",
-    label: "Google Gemini",
+    id: "google",
+    label: "Google AI",
     baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
-    defaultModel: "gemini-2.0-flash",
+    defaultModel: "gemini-2.5-flash",
     connect: "https://aistudio.google.com/apikey",
+    free: true,
+    models: ["gemini-2.5-flash", "gemini-2.5-pro"],
+  },
+  {
+    id: "anthropic",
+    label: "Anthropic",
+    baseURL: "https://api.anthropic.com/v1",
+    defaultModel: "claude-sonnet-4-5",
+    connect: "https://console.anthropic.com/settings/keys",
+    models: ["claude-sonnet-4-5", "claude-haiku-4-5"],
   },
   {
     id: "groq",
     label: "Groq",
     baseURL: "https://api.groq.com/openai/v1",
-    defaultModel: "llama-3.3-70b-versatile",
+    defaultModel: "openai/gpt-oss-120b",
     connect: "https://console.groq.com/keys",
+    free: true,
+    models: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"],
   },
   {
     id: "cerebras",
     label: "Cerebras",
     baseURL: "https://api.cerebras.ai/v1",
-    defaultModel: "llama3.1-8b",
+    defaultModel: "gpt-oss-120b",
     connect: "https://cloud.cerebras.ai",
+    free: true,
+    models: ["gpt-oss-120b", "qwen-3.8-27b"],
   },
   {
-    id: "mistral",
-    label: "Mistral",
-    baseURL: "https://api.mistral.ai/v1",
-    defaultModel: "mistral-large-latest",
-    connect: "https://console.mistral.ai/api-keys",
+    id: "zai",
+    label: "Z.ai (Zhipu)",
+    baseURL: "https://api.z.ai/api/paas/v4",
+    defaultModel: "glm-4.7-flash",
+    connect: "https://open.bigmodel.cn/usercenter/apikeys",
+    free: true,
+    models: ["glm-4.7-flash", "glm-4.6v-flash"],
   },
   {
     id: "openrouter",
     label: "OpenRouter",
     baseURL: "https://openrouter.ai/api/v1",
-    defaultModel: "meta-llama/llama-3.3-70b-instruct",
+    defaultModel: "baidu/ernie-5.5-flash-preview:free",
     connect: "https://openrouter.ai/keys",
+    free: true,
+    models: [
+      "baidu/ernie-5.5-flash-preview:free",
+      "liquid/lfm-3-1.7b:free",
+      "particle-ai/particle-1:free",
+      "recursive/flint-v1.0:free",
+      "nvidia/nemotron-3.5-super-vl:free",
+      "apodex/apodex-1.1-mini:free",
+      "dots-studio/dots-3-note-preview:free",
+      "liquid/lfm-2.5-2.6b:free",
+      "nvidia/nemotron-3.5-lightning:free",
+      "cohere/north-mini-code:free",
+      "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+      "google/gemma-4-26b-a4b-it:free",
+      "google/gemma-4-31b-it:free",
+      "openrouter/free",
+    ],
+  },
+  {
+    id: "mistral",
+    label: "Mistral AI",
+    baseURL: "https://api.mistral.ai/v1",
+    defaultModel: "mistral-small-latest",
+    connect: "https://console.mistral.ai/api-keys",
+    free: true,
+    models: ["mistral-small-latest", "codestral-latest", "mistral-medium-latest"],
+  },
+  {
+    id: "llm7",
+    label: "LLM7.io",
+    baseURL: "https://api.llm7.io/v1",
+    defaultModel: "gpt-oss:20b",
+    connect: "https://token.llm7.io",
+    free: true,
+    models: ["gpt-oss:20b", "codestral-latest", "nemotron-3-nano:30b"],
   },
   {
     id: "github",
     label: "GitHub Models",
     baseURL: "https://models.inference.ai.azure.com",
-    defaultModel: "gpt-4o-mini",
-    connect: "https://github.com/settings/tokens",
-  },
-  {
-    id: "zai",
-    label: "Z.ai",
-    baseURL: "https://api.z.ai/api/paas/v4",
-    defaultModel: "glm-4.5",
-    connect: "https://z.ai/manage-apikey/apikey-list",
+    defaultModel: "openai/gpt-4.1-mini",
+    connect: "https://github.com/settings/personal-access-tokens/new",
+    free: true,
+    models: ["openai/gpt-4.1-mini", "openai/gpt-4.1-nano", "openai/gpt-4.1"],
   },
 ];
 

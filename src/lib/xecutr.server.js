@@ -6,7 +6,7 @@ import { secrets } from "base44:runtime";
  * stay on the deployment. Point it somewhere else with the XECUTR_API_URL
  * secret, and set XECUTR_API_TOKEN when the deployment has FORGE_OS_API_TOKEN.
  */
-const DEFAULT_BASE = "https://forge-os-8whi.onrender.com";
+const DEFAULT_BASE = "http://31.220.86.31:8080";
 
 export const apiBase = () => (secrets.get("XECUTR_API_URL") || DEFAULT_BASE).replace(/\/+$/, "");
 
