@@ -42,11 +42,19 @@ const labelFor = (settings, providers) => {
  * server proxy; a saved project sends its files and memory along and keeps the
  * files the gateway writes.
  */
-export default function ChatPane({ projectId, initialMessages = [], pendingPrompt, onSaved, trial = false, onOpenFile }) {
+export default function ChatPane({
+  projectId,
+  initialMessages = [],
+  pendingPrompt,
+  onSaved,
+  trial = false,
+  onOpenFile,
+  mode: initialMode = "build",
+}) {
   const [prompt, setPrompt] = useState("");
   const [attachments, setAttachments] = useState([]);
   const [settings, setSettings] = useState({ providerId: "", model: "" });
-  const [mode, setMode] = useState("build");
+  const [mode, setMode] = useState(initialMode);
   const [catalog, setCatalog] = useState({ providers: [] });
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -61,7 +69,7 @@ export default function ChatPane({ projectId, initialMessages = [], pendingPromp
   const lastPromptRef = useRef("");
   const sentPending = useRef(false);
   const endRef = useRef(null);
-  const modeRef = useRef("build");
+  const modeRef = useRef(initialMode);
 
   projectRef.current = projectId;
   settingsRef.current = settings;

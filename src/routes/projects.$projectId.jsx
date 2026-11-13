@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Eye, Files, MessageSquare } from "lucide-react";
 import { base44 } from "@/api/base44Client";
@@ -12,6 +13,8 @@ import { useAuth } from "@/lib/AuthContext";
 
 export const Route = createFileRoute("/projects/$projectId")({
   ssr: false,
+  // The landing page hands a plan choice over when it opens a new project.
+  validateSearch: z.object({ mode: z.enum(["plan", "build"]).optional() }).parse,
   head: () => ({ meta: [{ title: "project — xecutr" }] }),
   component: ProjectWorkspace,
 });
@@ -216,6 +219,7 @@ function ProjectWorkspace() {
               pendingPrompt={pendingPrompt}
               onSaved={reload}
               onOpenFile={openFile}
+              mode={Route.useSearch().mode || "build"}
             />
           </div>
 

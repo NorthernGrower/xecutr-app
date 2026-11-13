@@ -33,6 +33,7 @@ function WorkspaceEntry() {
   const [prompt, setPrompt] = useState("");
   const [projects, setProjects] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState("build");
   const [trialMessages, setTrialMessages] = useState([]);
   const bootRef = useRef(false);
 
@@ -84,7 +85,11 @@ function WorkspaceEntry() {
         role: "user",
         content: text,
       });
-      navigate({ to: "/projects/$projectId", params: { projectId: project.id } });
+      navigate({
+        to: "/projects/$projectId",
+        params: { projectId: project.id },
+        search: mode === "plan" ? { mode: "plan" } : undefined,
+      });
     } finally {
       setBusy(false);
     }
@@ -123,6 +128,8 @@ function WorkspaceEntry() {
                 onChange={setPrompt}
                 onSubmit={start}
                 busy={busy}
+                mode={mode}
+                onModeChange={setMode}
                 placeholder="e.g. build a Python CLI that renames photos by capture date"
                 footer={
                   <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
