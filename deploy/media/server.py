@@ -104,9 +104,16 @@ def load_video():
         pipe.text_encoder.config.max_length = 226
     else:
         from diffusers import AnimateDiffPipeline, EulerDiscreteScheduler, MotionAdapter
+        from huggingface_hub import hf_hub_download
+        from safetensors.torch import load_file
 
-        log(f"loading AnimateDiff-Lightning on {ANIMATEDIFF_BASE}")
-        adapter = MotionAdapter.from_pretrained(ANIMATEDIFF_ADAPTER, torch_dtype=torch.float32)
+        log(f"loading AnimateDiff-Lightning {ANIMATEDIFF_WEIGHTS} on {ANIMATEDIFF_BASE}")
+        # AnimateDiff-Lightning checkpoints are complete motion modules (keys like
+        # down_blocks.*.motion_modules.*), NOT LoRAs — pipe.load_lora_weights rejects
+        # them with "Invalid LoRA checkpoint". ByteDance's official usage: load the
+        # safetensors into a fresh MotionAdapter with load_state_dict.
+        adapter = MotionAdapter()
+        adapter.load_state_dict(load_file(hf_hub_download(ANIMATEDIFF_LORA, ANIMATEDIFF_WEIGHTS)))
         pipe = AnimateDiffPipeline.from_pretrained(
             ANIMATEDIFF_BASE,
             motion_adapter=adapter,
@@ -115,10 +122,9 @@ def load_video():
         pipe.scheduler = EulerDiscreteScheduler.from_config(
             pipe.scheduler.config,
             beta_schedule="linear",
+            beta_start=0.00085,
             timestep_spacing="trailing",
         )
-        pipe.load_lora_weights(ANIMATEDIFF_LORA, weight_name=ANIMATEDIFF_WEIGHTS)
-        pipe.fuse_lora()
         pipe.enable_vae_slicing()
 
     pipe.set_progress_bar_config(disable=True)
