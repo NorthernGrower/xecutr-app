@@ -94,7 +94,7 @@ if printf '%s\n' "${changed}" | grep -q '^deploy/gateway/'; then
         -e FRONTEND_URL="${FRONTEND_URL:-https://xecutr.cloud}" \
         -e FRONTEND_ORIGIN="http://127.0.0.1:8082" \
         -e OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://127.0.0.1:11434/v1}" \
-        -e OLLAMA_MODEL="${OLLAMA_MODEL:-coder}" \
+        -e OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5-coder:7b}" \
         xecutr >/dev/null
     log "Gateway container rebuilt and restarted."
 fi
