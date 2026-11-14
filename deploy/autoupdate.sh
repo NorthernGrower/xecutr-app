@@ -85,17 +85,20 @@ fi
 # The media service (torch + diffusers) is its own image, so a change to it is a
 # rebuild of that one container; its model cache lives in a volume, not the image.
 if printf '%s\n' "${changed}" | grep -q '^deploy/media/'; then
-    log "Rebuilding the media image"
-    docker build -f deploy/media/Dockerfile -t xecutr-media . \
-        && docker rm -f xecutr-media >/dev/null 2>&1 || true
-    [ -n "$(docker images -q xecutr-media)" ] && docker run -d --name xecutr-media \
-        --restart unless-stopped --network host \
-        -v xecutr-media-data:/data \
-        -e PORT=8090 \
-        -e MEDIA_IMAGE_MODEL="${MEDIA_IMAGE_MODEL:-stabilityai/sd-turbo}" \
-        -e MEDIA_VIDEO_MODEL="${MEDIA_VIDEO_MODEL:-animatediff}" \
-        xecutr-media >/dev/null
-    log "Media container rebuilt and restarted."
+    log "Rebuilding the media image (a few minutes — torch and diffusers)"
+    if docker build -f deploy/media/Dockerfile -t xecutr-media .; then
+        docker rm -f xecutr-media >/dev/null 2>&1 || true
+        docker run -d --name xecutr-media \
+            --restart unless-stopped --network host \
+            -v xecutr-media-data:/data \
+            -e PORT=8090 \
+            -e MEDIA_IMAGE_MODEL="${MEDIA_IMAGE_MODEL:-stabilityai/sd-turbo}" \
+            -e MEDIA_VIDEO_MODEL="${MEDIA_VIDEO_MODEL:-animatediff}" \
+            xecutr-media >/dev/null
+        log "Media container rebuilt and restarted."
+    else
+        log "!! The media image did not build — the running container is left alone."
+    fi
 fi
 
 # The gateway container is built from this repo; rebuild and restart it when
