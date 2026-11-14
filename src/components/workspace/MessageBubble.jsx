@@ -24,6 +24,24 @@ function FileChip({ path, language, onOpen }) {
   );
 }
 
+/** A generated image or clip, shown where the reply asked for it. */
+function MediaTile({ item }) {
+  const src = item.dataUrl || item.url;
+  if (!src) return null;
+  return (
+    <figure className="mt-2 overflow-hidden rounded-sm border border-white/10 bg-black/30">
+      {item.kind === "video" ? (
+        <video src={src} controls playsInline className="w-full" />
+      ) : (
+        <img src={src} alt={item.prompt || item.path || "generated"} className="w-full" />
+      )}
+      <figcaption className="truncate px-2 py-1 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+        {item.path}
+      </figcaption>
+    </figure>
+  );
+}
+
 function ToolCard({ part }) {
   const done = part.state === "complete";
   const label = part.input?.path || part.input?.url || part.input?.name || "";
@@ -45,8 +63,9 @@ export default function MessageBubble({ message, onOpenFile }) {
   const text = textOfMessage(message);
   const segments = isUser ? [{ type: "text", content: text }] : parseSegments(text);
   const toolCalls = (message.parts ?? []).filter((p) => p.type === "tool-call");
+  const media = message.media ?? [];
 
-  if (!text && !toolCalls.length) return null;
+  if (!text && !toolCalls.length && !media.length) return null;
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -63,6 +82,10 @@ export default function MessageBubble({ message, onOpenFile }) {
             {message.model ? ` · ${message.model}` : ""}
           </div>
         )}
+
+        {media.map((item) => (
+          <MediaTile key={item.path} item={item} />
+        ))}
 
         {segments.map((seg, i) =>
           seg.type === "text" ? (

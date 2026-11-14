@@ -82,6 +82,22 @@ if printf '%s\n' "${changed}" | grep -q '^deploy/serve'; then
     systemctl restart xecutr-proxy
 fi
 
+# The media service (torch + diffusers) is its own image, so a change to it is a
+# rebuild of that one container; its model cache lives in a volume, not the image.
+if printf '%s\n' "${changed}" | grep -q '^deploy/media/'; then
+    log "Rebuilding the media image"
+    docker build -f deploy/media/Dockerfile -t xecutr-media . \
+        && docker rm -f xecutr-media >/dev/null 2>&1 || true
+    [ -n "$(docker images -q xecutr-media)" ] && docker run -d --name xecutr-media \
+        --restart unless-stopped --network host \
+        -v xecutr-media-data:/data \
+        -e PORT=8090 \
+        -e MEDIA_IMAGE_MODEL="${MEDIA_IMAGE_MODEL:-stabilityai/sd-turbo}" \
+        -e MEDIA_VIDEO_MODEL="${MEDIA_VIDEO_MODEL:-animatediff}" \
+        xecutr-media >/dev/null
+    log "Media container rebuilt and restarted."
+fi
+
 # The gateway container is built from this repo; rebuild and restart it when
 # its files change. The container fronts Ollama and owns public port 8080.
 if printf '%s\n' "${changed}" | grep -q '^deploy/gateway/'; then
@@ -95,6 +111,7 @@ if printf '%s\n' "${changed}" | grep -q '^deploy/gateway/'; then
         -e FRONTEND_ORIGIN="http://127.0.0.1:8082" \
         -e OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://127.0.0.1:11434/v1}" \
         -e OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5-coder:7b}" \
+        -e MEDIA_URL="${MEDIA_URL:-http://127.0.0.1:8090}" \
         xecutr >/dev/null
     log "Gateway container rebuilt and restarted."
 fi

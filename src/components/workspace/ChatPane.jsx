@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Paperclip, X } from "lucide-react";
+import { AlertTriangle, Image as ImageIcon, Paperclip, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import Composer from "@/components/workspace/Composer";
 import MessageBubble from "@/components/workspace/MessageBubble";
 import ModelPicker from "@/components/workspace/ModelPicker";
 import PromptHistory from "@/components/workspace/PromptHistory";
+import MediaDialog from "@/components/workspace/MediaDialog";
 import useXecutrChat from "@/hooks/use-xecutr-chat";
+import useMediaJob from "@/hooks/use-media-job";
 import { attachArtifact, xecutrCatalog } from "@/lib/chat";
 import { mergeCatalog, modelLabel } from "@/lib/catalog";
 import { isTextLike, readKeys, readSettings, saveSettings } from "@/lib/providers";
@@ -58,6 +60,7 @@ export default function ChatPane({
   const [catalog, setCatalog] = useState({ providers: [] });
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [mediaOpen, setMediaOpen] = useState(false);
 
   // Gateway catalogue plus the shipped provider/models list, so every free
   // model (OVH included) is pickable even before the catalogue answers.
@@ -124,6 +127,52 @@ export default function ChatPane({
     [trial],
   );
 
+  // Generated media is written like any other file, and shown on the turn that asked for it.
+  const attachRef = useRef(() => {});
+  const { run: runMedia } = useMediaJob();
+
+  const saveGenerated = useCallback(
+    async (requests, messageId) => {
+      const request = requests?.[0];
+      if (!request) return;
+
+      const done = await runMedia(request);
+      if (!done) return;
+
+      const content = done.dataUrl || done.url;
+      if (!content) {
+        setNotice("That file is on the server but too large to store in this project.");
+        return;
+      }
+
+      const ext = done.kind === "video" ? "mp4" : "jpg";
+      const path = `assets/generated/${done.kind}-${done.id}.${ext}`;
+      attachRef.current(messageId, [
+        {
+          kind: done.kind,
+          path,
+          dataUrl: done.dataUrl || null,
+          url: done.url || null,
+          prompt: done.prompt,
+        },
+      ]);
+      await writeFiles([{ path, content }]);
+    },
+    [runMedia, writeFiles],
+  );
+
+  /** What the media panel makes lands in the project too. */
+  const saveFromPanel = useCallback(
+    async (done) => {
+      const content = done?.dataUrl || done?.url;
+      if (!content) return;
+      const ext = done.kind === "video" ? "mp4" : "jpg";
+      await writeFiles([{ path: `assets/generated/${done.kind}-${done.id}.${ext}`, content }]);
+      savedRef.current?.();
+    },
+    [writeFiles],
+  );
+
   const persist = useCallback(
     async ({ text, provider, model }) => {
       const pid = projectRef.current;
@@ -188,13 +237,16 @@ export default function ChatPane({
     [trial],
   );
 
-  const { messages, send, isLoading, error } = useXecutrChat({
+  const { messages, send, isLoading, error, attachMedia } = useXecutrChat({
     initialMessages,
     onFiles: writeFiles,
+    onMedia: saveGenerated,
     onFinish: (result) => {
       persist(result).catch(() => setNotice("Saved locally only — the project write failed."));
     },
   });
+
+  attachRef.current = attachMedia;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -382,6 +434,16 @@ export default function ChatPane({
                   onChange={(e) => upload(e.target.files?.[0])}
                 />
               </label>
+              {!trial && projectId && (
+                <button
+                  type="button"
+                  onClick={() => setMediaOpen(true)}
+                  title="Generate an image or a clip with this server's own models"
+                  className="rounded-sm border border-white/10 p-1.5 text-muted-foreground transition hover:border-[#b0c4de]/40 hover:text-white"
+                >
+                  <ImageIcon className="h-3 w-3" strokeWidth={1.6} />
+                </button>
+              )}
               <PromptHistory prompts={promptHistory} onPick={setPrompt} />
               <ModelPicker
                 providers={providers}
@@ -394,6 +456,10 @@ export default function ChatPane({
           }
         />
       </div>
+
+      {!trial && projectId && (
+        <MediaDialog open={mediaOpen} onOpenChange={setMediaOpen} onGenerated={saveFromPanel} />
+      )}
     </div>
   );
 }

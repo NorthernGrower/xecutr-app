@@ -14,6 +14,18 @@ const TYPES = {
   md: "text/plain; charset=utf-8",
   csv: "text/csv; charset=utf-8",
   webmanifest: "application/manifest+json",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  avif: "image/avif",
+  ico: "image/x-icon",
+  mp4: "video/mp4",
+  webm: "video/webm",
+  woff: "font/woff",
+  woff2: "font/woff2",
+  wasm: "application/wasm",
 };
 
 const clean = (path = "") => path.replace(/^\/+/, "").replace(/^\.\//, "");
@@ -56,7 +68,26 @@ async function serve({ params, context }) {
   if (!file) return wanted ? new Response("not found", { status: 404 }) : html(NO_ENTRY);
 
   const ext = (clean(file.path).split(".").pop() || "").toLowerCase();
-  return new Response(file.content || "", {
+  const content = file.content || "";
+
+  // Generated media lives inside the project as a data URL — serve its bytes,
+  // so an <img src="./assets/hero.jpg"> in the project really loads.
+  const inline = /^data:([^;,]*)(;base64)?,/i.exec(content);
+  if (inline) {
+    const type = inline[1] || TYPES[ext] || "application/octet-stream";
+    const payload = content.slice(inline[0].length);
+    if (inline[2]) {
+      const binary = atob(payload);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      return new Response(bytes, { headers: { "content-type": type, "cache-control": "no-store" } });
+    }
+    return new Response(decodeURIComponent(payload), {
+      headers: { "content-type": type, "cache-control": "no-store" },
+    });
+  }
+
+  return new Response(content, {
     headers: {
       "content-type": TYPES[ext] || "text/plain; charset=utf-8",
       "cache-control": "no-store",

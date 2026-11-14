@@ -10,6 +10,11 @@
  *   POST /api/uploads    raw bytes, kept for the conversation
  *   POST /api/chat       one streaming turn (SSE: route/text/files/error, [DONE])
  *
+ * The media service (deploy/media) is passed straight through, so the app can
+ * generate images and clips without a second public port:
+ *   POST /api/media/jobs, GET /api/media/jobs/<id>, GET /api/media/health,
+ *   GET  /media/<file>
+ *
  * Everything else is proxied: Base44's platform prefixes go to the Base44
  * backend, all app traffic goes to the built front-end (vite preview).
  *
@@ -19,6 +24,7 @@
  *   OLLAMA_MODEL     model used when none requested (default coder)
  *   FRONTEND_ORIGIN  where the app build runs       (default http://127.0.0.1:8082)
  *   BASE44_BACKEND   where Base44's platform lives  (default https://base44.app)
+ *   MEDIA_URL        where the media service listens (default http://127.0.0.1:8090)
  */
 
 const http = require('node:http');
@@ -32,6 +38,7 @@ const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'coder';
 const FRONT = new URL(process.env.FRONTEND_ORIGIN || 'http://127.0.0.1:8082');
 const BACKEND = new URL(process.env.BASE44_BACKEND || 'https://base44.app');
 const UPLOAD_DIR = '/tmp/xecutr-uploads';
+const MEDIA = new URL(process.env.MEDIA_URL || 'http://127.0.0.1:8090');
 
 const BASE44_PREFIXES = [
   '/api/apps/',
@@ -86,6 +93,15 @@ const systemPrompt = (body, uploadNotes) => {
       );
     }
   }
+  // The app watches for these markers in the reply and runs the media service.
+  parts.push(
+    'This project can generate media on this server. When the user asks for an image, ' +
+      'add one line of exactly this shape: [[image: a vivid one-sentence description]] . ' +
+      'When they ask for a video or an animation, add: [[video: a vivid one-sentence description]] . ' +
+      'The app turns each marker into a real file in the project, so describe the weather, ' +
+      'light, colours, subject and style — not the code. Use at most one marker per reply, ' +
+      'and only when the user asked for media: images take seconds, clips take minutes.',
+  );
   if (uploadNotes.length) parts.push(uploadNotes.join('\n'));
   return parts.filter(Boolean).join('\n\n');
 };
@@ -254,6 +270,35 @@ const upload = async (req, res) => {
   res.end(JSON.stringify({ ok: true, uploadId: id, name, size: bytes.length }));
 };
 
+/**
+ * The media service is reached on the host loopback; its own paths are the
+ * public ones, so this is a straight pass-through — JSON in, JSON or bytes out.
+ */
+const mediaProxy = (pathname, req, res) => {
+  const upstream = http.request(
+    {
+      hostname: MEDIA.hostname,
+      port: MEDIA.port || 80,
+      method: req.method,
+      path: pathname + (req.url.includes('?') ? `?${req.url.split('?').slice(1).join('?')}` : ''),
+      headers: { ...req.headers, host: MEDIA.hostname },
+    },
+    (up) => {
+      res.writeHead(up.statusCode || 502, up.headers);
+      up.pipe(res);
+    },
+  );
+  upstream.on('error', () => {
+    if (!res.headersSent) res.writeHead(503, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        error: 'The media service is not running on this server (docker ps | grep xecutr-media).',
+      }),
+    );
+  });
+  req.pipe(upstream);
+};
+
 /** Proxy a request — and tunnel its upgrade — to a target URL. */
 const proxy = (target) => (req, res) => {
   const headers = { ...req.headers, host: target.hostname };
@@ -290,6 +335,8 @@ const server = http.createServer((req, res) => {
     upload(req, res);
   } else if (pathname === '/api/chat' && req.method === 'POST') {
     chatTurn(req, res);
+  } else if (pathname.startsWith('/api/media/') || pathname.startsWith('/media/')) {
+    mediaProxy(pathname, req, res);
   } else if (BASE44_PREFIXES.some((p) => pathname.startsWith(p))) {
     proxy(BACKEND)(req, res);
   } else {

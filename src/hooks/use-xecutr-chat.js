@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { ask } from "@/lib/chat";
-import { textOfMessage } from "@/lib/text-segments";
+import { splitMedia, textOfMessage } from "@/lib/text-segments";
 
 let seq = 0;
 const nextId = () => `msg-${Date.now()}-${(seq += 1)}`;
@@ -8,16 +8,27 @@ const nextId = () => `msg-${Date.now()}-${(seq += 1)}`;
 /**
  * Sends one turn to this app's own model server through `ask()` and renders the
  * answer it returns, with the route badge of the model that produced it.
+ * `onMedia` receives the reply's [[image: …]] requests once the text is up, so
+ * a slow generation never holds the answer back.
  */
-export default function useXecutrChat({ initialMessages = [], onFiles, onFinish }) {
+export default function useXecutrChat({ initialMessages = [], onFiles, onMedia, onFinish }) {
   const [messages, setMessages] = useState(initialMessages);
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const live = useRef({ messages: initialMessages, onFiles, onFinish, loading: false });
+  const live = useRef({ messages: initialMessages, onFiles, onMedia, onFinish, loading: false });
   live.current.messages = messages;
   live.current.onFiles = onFiles;
+  live.current.onMedia = onMedia;
   live.current.onFinish = onFinish;
+
+  /** Generated media lands on the message that asked for it, when it is ready. */
+  const attachMedia = useCallback((messageId, items) => {
+    if (!items?.length) return;
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, media: [...(m.media || []), ...items] } : m)),
+    );
+  }, []);
 
   const send = useCallback(async ({ text, providerId = "", model = "", attachments = [], projectId = null, keys = null, mode = "build" }) => {
     if (live.current.loading) return;
@@ -39,7 +50,9 @@ export default function useXecutrChat({ initialMessages = [], onFiles, onFinish 
         data: { prompt: text, messages: history, projectId, providerId, model, attachments, keys, mode },
       });
 
-      const reply = result?.text || "";
+      const raw = result?.text || "";
+      // Media markers are not prose: they come out of the text and become jobs.
+      const { text: reply, requests } = splitMedia(raw);
 
       setMessages((prev) =>
         prev.map((m) =>
@@ -55,6 +68,7 @@ export default function useXecutrChat({ initialMessages = [], onFiles, onFinish 
       );
 
       if (result?.files?.length) live.current.onFiles?.(result.files);
+      if (requests.length) live.current.onMedia?.(requests, assistantId);
 
       if (reply) {
         live.current.onFinish?.({
@@ -72,5 +86,5 @@ export default function useXecutrChat({ initialMessages = [], onFiles, onFinish 
     }
   }, []);
 
-  return { messages, send, isLoading, error };
+  return { messages, send, isLoading, error, attachMedia };
 }

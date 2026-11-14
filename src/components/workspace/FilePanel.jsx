@@ -4,17 +4,41 @@ import Panel from "@/components/workspace/Panel";
 import GitHubDialog from "@/components/workspace/GitHubDialog";
 import { downloadZip } from "@/lib/zip";
 
+const MEDIA_EXT = /\.(png|jpe?g|webp|gif|avif|mp4|webm|mov)$/i;
+const INLINE_MEDIA = /^data:(image|video)\//i;
+
+/** Generated files are stored as data URLs; everything else is text. */
+const isMedia = (file) =>
+  Boolean(file) && (INLINE_MEDIA.test(file.content || "") || MEDIA_EXT.test(file.path || ""));
+
+const isVideo = (file) =>
+  /^data:video\//i.test(file.content || "") || /\.(mp4|webm|mov)$/i.test(file.path || "");
+
+const saveBlob = (blob, name) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 export default function FilePanel({ project, files, selected, onSelect, onRefresh, onPreview }) {
   const [openGitHub, setOpenGitHub] = useState(false);
   const active = files.find((f) => f.path === selected) || files[0] || null;
 
   const download = (file) => {
-    const url = URL.createObjectURL(new Blob([file.content || ""], { type: "text/plain" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = file.path.split("/").pop() || "file.txt";
-    a.click();
-    URL.revokeObjectURL(url);
+    const content = file?.content || "";
+    const name = file.path.split("/").pop() || "file";
+    const inline = /^data:([^;,]+);base64,/i.exec(content);
+    if (inline) {
+      const binary = atob(content.slice(inline[0].length));
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      saveBlob(new Blob([bytes], { type: inline[1] }), name);
+      return;
+    }
+    saveBlob(new Blob([content], { type: "text/plain" }), name);
   };
 
   return (
@@ -104,9 +128,19 @@ export default function FilePanel({ project, files, selected, onSelect, onRefres
                 </button>
               </div>
             </div>
-            <pre className="min-h-0 flex-1 overflow-auto px-3 py-2.5 font-mono text-[11px] leading-relaxed text-[#c9d3de]">
-              {active.content}
-            </pre>
+            {isMedia(active) ? (
+              <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto bg-black/30 p-2">
+                {isVideo(active) ? (
+                  <video src={active.content} controls playsInline className="w-full rounded-sm" />
+                ) : (
+                  <img src={active.content} alt={active.path} className="w-full rounded-sm" />
+                )}
+              </div>
+            ) : (
+              <pre className="min-h-0 flex-1 overflow-auto px-3 py-2.5 font-mono text-[11px] leading-relaxed text-[#c9d3de]">
+                {active.content}
+              </pre>
+            )}
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center px-4">

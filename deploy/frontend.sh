@@ -195,6 +195,21 @@ UNIT
   fi
 fi
 
+# ---------------------------------------------------------- start the media box
+# Image and clip generation runs in its own container so torch and diffusers
+# never touch the host, and its model cache survives a rebuild.
+log "Building the media service (image + clip generation, CPU)"
+docker build -f deploy/media/Dockerfile -t xecutr-media . > /root/xecutr-media-build.log 2>&1 \
+  || fail "The media image would not build. Paste the last 30 lines of /root/xecutr-media-build.log."
+docker stop xecutr-media >/dev/null 2>&1 || true
+docker rm xecutr-media >/dev/null 2>&1 || true
+docker run -d --name xecutr-media --restart unless-stopped --network host \
+  -v xecutr-media-data:/data \
+  -e PORT=8090 \
+  -e MEDIA_IMAGE_MODEL="${MEDIA_IMAGE_MODEL:-stabilityai/sd-turbo}" \
+  -e MEDIA_VIDEO_MODEL="${MEDIA_VIDEO_MODEL:-animatediff}" \
+  xecutr-media >/dev/null
+
 # ------------------------------------------------------------ start the gateway
 # The gateway image was built from this repo above — nothing to clone or
 # rebuild from a second repo. Run it on public port 8080 with Ollama behind it.
@@ -207,6 +222,7 @@ docker run -d --name xecutr --restart unless-stopped --network host \
   -e FRONTEND_ORIGIN="http://127.0.0.1:$FRONT_PORT" \
   -e OLLAMA_BASE_URL=http://127.0.0.1:11434/v1 \
   -e OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5-coder:7b}" \
+  -e MEDIA_URL="http://127.0.0.1:8090" \
   ${FORGE_OS_CORS_ORIGIN:+-e FORGE_OS_CORS_ORIGIN="$FORGE_OS_CORS_ORIGIN"} \
   ${FORGE_OS_API_TOKEN:+-e FORGE_OS_API_TOKEN="$FORGE_OS_API_TOKEN"} \
   xecutr >/dev/null

@@ -1,5 +1,22 @@
 const FENCE = /```([^\n]*)\n([\s\S]*?)```/g;
 
+/** The media tool's markers: the app turns these into real files. */
+const MEDIA_MARK = /\[\[\s*(image|video)\s*:\s*([^\]]{3,900})\]\]/gi;
+
+/**
+ * Pull `[[image: …]]` / `[[video: …]]` markers out of a reply. What is left is
+ * what the user reads; each marker becomes one generation request.
+ */
+export function splitMedia(text = "") {
+  const requests = [];
+  const rest = text.replace(MEDIA_MARK, (_whole, kind, prompt) => {
+    const clean = prompt.replace(/\s+/g, " ").trim();
+    if (clean) requests.push({ kind: kind.toLowerCase(), prompt: clean });
+    return "";
+  });
+  return { text: rest.replace(/\n{3,}/g, "\n\n").trim(), requests };
+}
+
 /**
  * Split an assistant reply into prose, code and file segments.
  * A fence whose header is `file path="…"` is a file, anything else is code.
@@ -43,7 +60,7 @@ export function fileBlocks(text = "") {
 
 /** The reply's prose with fences removed — what gets stored as the message body. */
 export function plainText(text = "") {
-  return text.replace(FENCE, (_m, _h, body) => body).replace(/\n{3,}/g, "\n\n").trim();
+  return splitMedia(text.replace(FENCE, (_m, _h, body) => body)).text.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 export function textOfMessage(message) {

@@ -27,6 +27,19 @@ const headers = () => ({ "Content-Type": "application/json", ...authHeaders() })
 
 const isLocal = (base) => /^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(base);
 
+/** Base64 without Buffer — this runs in the Worker runtime, not Node. */
+const toBase64 = (bytes) => {
+  let binary = "";
+  const step = 0x8000;
+  for (let i = 0; i < bytes.length; i += step) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + step));
+  }
+  return btoa(binary);
+};
+
+/** Media above this stays on the server and travels by address instead. */
+const MAX_INLINE_MEDIA = 1_600_000;
+
 /**
  * A caller's provider keys may only travel over TLS. The gateway default is a
  * plain-http address, so anything sent there would be readable on the wire.
@@ -127,5 +140,71 @@ export async function fetchHealth() {
     return { ok: Boolean(body?.ok), name: body?.name || "xecutr", time: body?.time || null };
   } catch (err) {
     return { ok: false, error: String(err?.message || err) };
+  }
+}
+
+/** GET /api/media/health — which generation models the server has loaded. */
+export async function fetchMediaHealth() {
+  try {
+    const res = await fetch(`${apiBase()}/api/media/health`, { headers: headers() });
+    if (!res.ok) {
+      return { ok: false, error: "The media service is not running on this server." };
+    }
+    return await res.json();
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
+}
+
+/** POST /api/media/jobs — queue one image or clip; the job is polled by id. */
+export async function postMediaJob(body) {
+  const res = await fetch(`${apiBase()}/api/media/jobs`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(body),
+  });
+  const payload = await res.json().catch(() => null);
+  if (!res.ok || !payload?.id) {
+    throw Object.assign(
+      new Error(payload?.error || `The media service answered ${res.status}.`),
+      { status: 502 },
+    );
+  }
+  return payload;
+}
+
+/**
+ * One media job's state. The bytes are pulled once the job is done: small ones
+ * ride back as a data URL (so they live inside the project), larger ones by
+ * address, which is all a <video> needs.
+ */
+export async function fetchMediaJob(id) {
+  const res = await fetch(`${apiBase()}/api/media/jobs/${encodeURIComponent(id)}`, {
+    headers: headers(),
+  });
+  const payload = await res.json().catch(() => null);
+  if (!res.ok || !payload) {
+    throw Object.assign(new Error(`The media service answered ${res.status}.`), { status: 502 });
+  }
+  if (payload.status !== "done" || !payload.file || payload.dataUrl) return payload;
+
+  const file = encodeURIComponent(payload.file);
+  const url = `${apiBase()}/media/${file}`;
+  try {
+    const bytes = await fetch(url, { headers: authHeaders() });
+    if (!bytes.ok) return payload;
+    const type = bytes.headers.get("content-type") || "application/octet-stream";
+    const data = new Uint8Array(await bytes.arrayBuffer());
+    if (data.byteLength > MAX_INLINE_MEDIA) {
+      return { ...payload, url, bytes: data.byteLength };
+    }
+    return {
+      ...payload,
+      url,
+      bytes: data.byteLength,
+      dataUrl: `data:${type};base64,${toBase64(data)}`,
+    };
+  } catch {
+    return { ...payload, url };
   }
 }

@@ -32,7 +32,7 @@ fail() { printf '\n!! %s\n' "$*" >&2; exit 1; }
 log "1/4 Stopping and removing any old deploy (Ollama and its models stay)"
 systemctl disable --now xecutr-frontend 2>/dev/null || true
 rm -f /etc/systemd/system/xecutr-frontend.service /root/xecutr-frontend.sh
-docker rm -f xecutr 2>/dev/null || true
+docker rm -f xecutr xecutr-media 2>/dev/null || true
 pkill -f 'vite preview' 2>/dev/null || true
 pkill -f 'wrangler dev' 2>/dev/null || true
 pkill -f 'vite dev' 2>/dev/null || true

@@ -19,6 +19,17 @@ const crc32 = (bytes) => {
 const u16 = (n) => [n & 0xff, (n >>> 8) & 0xff];
 const u32 = (n) => [n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff];
 
+const DATA_URL = /^data:[^;,]*;base64,/i;
+
+/** Generated media is stored as a data URL — a zip needs its real bytes. */
+const bytesOf = (content, encoder) => {
+  if (!DATA_URL.test(content)) return encoder.encode(content);
+  const binary = atob(content.slice(content.indexOf(",") + 1));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+};
+
 /** files: [{ path, content }] → Blob (application/zip) */
 export function makeZip(files) {
   const encoder = new TextEncoder();
@@ -28,7 +39,7 @@ export function makeZip(files) {
 
   files.forEach((file) => {
     const nameBytes = encoder.encode(file.path.replace(/^\//, ""));
-    const data = encoder.encode(file.content ?? "");
+    const data = bytesOf(file.content ?? "", encoder);
     const crc = crc32(data);
 
     const local = [

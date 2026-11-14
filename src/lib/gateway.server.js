@@ -48,7 +48,7 @@ const withAttachments = (messages, attachments) => {
  * whatever role handling it implements.
  */
 const PLAN_DIRECTIVE =
-  "\n\n[MODE: PLAN ONLY] Do not write, create, modify or delete any files, and do not run any tool that changes anything. Study the conversation and the project files provided, then reply with the plan you would follow: what you would build or change, which files are involved, and the order of work. Building starts only after the user approves the plan.";
+  "\n\n[MODE: PLAN ONLY] Do not write, create, modify or delete any files, and do not run any tool that changes anything. Do not emit [[image: …]] or [[video: …]] markers either — media generation happens only when the user asks for it after approving the plan. Study the conversation and the project files provided, then reply with the plan you would follow: what you would build or change, which files are involved, and the order of work. Building starts only after the user approves the plan.";
 
 /**
  * Assembles one turn for this app's own model server: the caller check, the
