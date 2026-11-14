@@ -108,11 +108,36 @@ const server = http.createServer((req, res) => {
     res.writeHead(405, { Allow: 'POST' }).end();
     return;
   }
-  if (!authorized(req)) {
+
+  // The integration's key may carry a Bearer prefix or not — both are accepted.
+  const header = req.headers.authorization || '';
+  const ok = authorized(req);
+  console.error(`[mcp] ${req.method} ${req.url} auth=${ok ? 'ok' : 'FAIL'}`);
+
+  if (!ok) {
     res.writeHead(401, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'unauthorized' }));
     return;
   }
+
+  // MCP clients may ask for SSE framing; JSON is equally valid per spec.
+  const wantsSse = String(req.headers.accept || '').includes('text/event-stream');
+  const respond = (payload) => {
+    const json = JSON.stringify(payload);
+    if (wantsSse) {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      });
+      res.write(`event: message\ndata: ${json}\n\n`);
+      res.end();
+    } else {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(json);
+    }
+    console.error(`[mcp] replied ${wantsSse ? 'sse' : 'json'}: ${json.slice(0, 200)}`);
+  };
 
   const chunks = [];
   req.on('data', (c) => chunks.push(c));
@@ -129,8 +154,7 @@ const server = http.createServer((req, res) => {
     // A batch is answered with one JSON array; a single message with one object.
     if (Array.isArray(body)) {
       const replies = (await Promise.all(body.map(handle))).filter(Boolean);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(replies));
+      respond(replies);
       return;
     }
 
@@ -139,8 +163,7 @@ const server = http.createServer((req, res) => {
       res.writeHead(202).end(); // a notification: no body expected
       return;
     }
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(reply));
+    respond(reply);
   });
 });
 
