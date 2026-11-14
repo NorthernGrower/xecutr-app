@@ -128,6 +128,7 @@ export function RegisterPage() {
 
   return (
     <AuthLayout icon={UserPlus} title="Create your account" subtitle="Sign up to get started">
+      <AppleButton returnTo={returnTo} onError={setError} />
       <GoogleButton returnTo={returnTo} onError={setError} />
       <OrDivider />
       <AuthError>{error}</AuthError>
