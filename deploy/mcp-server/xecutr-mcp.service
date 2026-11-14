@@ -1,0 +1,12 @@
+[Unit]
+Description=Xecutr MCP shell bridge (runs commands on the host)
+After=network.target
+
+[Service]
+# The token lives in /root/.mcp-token (created with: openssl rand -hex 24 > /root/.mcp-token)
+ExecStart=/bin/sh -c 'MCP_TOKEN=$(cat /root/.mcp-token) node /root/xecutr-app/deploy/mcp-server/server.cjs'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
