@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Bot, Cpu, LayoutGrid, ListTodo, LogOut, Menu, Plug } from "lucide-react";
+import { Bot, Cpu, LayoutGrid, ListTodo, LogOut, Menu, Plug, Shield, User as UserIcon } from "lucide-react";
 import Mark from "@/components/brand/Mark";
 import {
   DropdownMenu,
@@ -11,19 +11,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/AuthContext";
 
-const NAV = [
-  { to: "/projects", label: "projects", Icon: LayoutGrid },
-  { to: "/tasks", label: "tasks", Icon: ListTodo },
-  { to: "/agent", label: "agent", Icon: Bot },
-  { to: "/connections", label: "connections", Icon: Plug },
-];
-
 const NAV_CLASS =
   "inline-flex items-center gap-1.5 rounded-sm border border-white/10 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground transition hover:border-[#b0c4de]/40 hover:text-white";
 
 /** Top chrome shared by every workspace screen. Nav collapses into a menu on phones. */
 export default function WorkspaceHeader({ providerLabel }) {
   const { user, isLoadingAuth, logout, navigateToLogin } = useAuth();
+
+  // Profile is for every member; admin only for whoever the platform marks as admin.
+  const NAV = [
+    { to: "/projects", label: "projects", Icon: LayoutGrid },
+    { to: "/tasks", label: "tasks", Icon: ListTodo },
+    { to: "/agent", label: "agent", Icon: Bot },
+    { to: "/connections", label: "connections", Icon: Plug },
+    { to: "/profile", label: "profile", Icon: UserIcon },
+    ...(user?.role === "admin" ? [{ to: "/admin", label: "admin", Icon: Shield }] : []),
+  ];
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#0a0a0a]/85 backdrop-blur-xl">
