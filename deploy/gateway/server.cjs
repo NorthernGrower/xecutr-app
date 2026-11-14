@@ -152,10 +152,19 @@ const chatTurn = async (req, res) => {
     let full = '';
     let buffer = '';
     const decoder = new TextDecoder();
-    for (;;) {
-      const { value, done } = await upstream.body.getReader().read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+    // One reader for the whole stream: a second getReader() on a live stream
+    // throws "ReadableStream is locked" and would fail the turn after chunk one.
+    const reader = upstream.body.getReader();
+
+    const emit = (record) => {
+      const delta = record?.choices?.[0]?.delta?.content;
+      if (!delta) return;
+      full += delta;
+      sse(res, { type: 'text', text: delta });
+    };
+
+    const take = (chunk) => {
+      buffer += chunk;
       let cut;
       while ((cut = buffer.indexOf('\n')) !== -1) {
         const line = buffer.slice(0, cut).trim();
@@ -164,14 +173,24 @@ const chatTurn = async (req, res) => {
         const payload = line.slice(5).trim();
         if (payload === '[DONE]') continue;
         try {
-          const delta = JSON.parse(payload)?.choices?.[0]?.delta?.content;
-          if (delta) {
-            full += delta;
-            sse(res, { type: 'text', text: delta });
-          }
+          emit(JSON.parse(payload));
         } catch {
           /* partial JSON across a chunk boundary — the next chunk completes it */
         }
+      }
+    };
+
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      take(decoder.decode(value, { stream: true }));
+    }
+    take(decoder.decode());
+    if (buffer.trim().startsWith('data:')) {
+      try {
+        emit(JSON.parse(buffer.trim().slice(5).trim()));
+      } catch {
+        /* a truncated final line is not a delta */
       }
     }
 
