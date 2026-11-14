@@ -27,7 +27,7 @@ export default function ModelPicker({ providers = [], value, onChange, onRefresh
           type="button"
           aria-label="Choose provider and model"
           title={current}
-          className="inline-flex h-7 max-w-[240px] items-center gap-1.5 rounded-sm border border-white/10 px-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de] transition hover:border-[#b0c4de]/40 hover:text-white"
+          className="inline-flex h-7 min-w-0 max-w-[150px] items-center gap-1.5 rounded-sm border border-white/10 px-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de] transition hover:border-[#b0c4de]/40 hover:text-white sm:max-w-[240px]"
         >
           <Sparkles className="h-3 w-3 shrink-0" strokeWidth={1.6} />
           <span className="truncate">{current}</span>

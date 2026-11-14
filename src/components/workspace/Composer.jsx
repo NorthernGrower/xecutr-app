@@ -24,7 +24,7 @@ export default function Composer({
         e.preventDefault();
         if (canSend) onSubmit();
       }}
-      className="glow-edge rounded-sm border border-[#b0c4de]/30 bg-[#1c2128]"
+      className="glow-edge overflow-hidden rounded-sm border border-[#b0c4de]/30 bg-[#1c2128]"
     >
       <textarea
         value={value}
@@ -36,9 +36,9 @@ export default function Composer({
         placeholder={placeholder}
         className="w-full resize-none bg-transparent px-4 py-3.5 font-body text-[14px] leading-relaxed text-[#eef3f8] outline-none placeholder:text-[#7e8b99]"
       />
-      <div className="flex items-center justify-between gap-3 border-t border-white/10 px-3 py-2.5">
-        <div className="min-w-0 truncate">{footer}</div>
-        <div className="flex shrink-0 items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 gap-y-2.5 border-t border-white/10 px-3 py-2.5">
+        <div className="min-w-0 flex-1 truncate">{footer}</div>
+        <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
           {onModeChange && (
             <div className="inline-flex items-center overflow-hidden rounded-sm border border-white/10">
               {MODES.map(({ id, label, icon: Icon, title }) => {
@@ -49,7 +49,7 @@ export default function Composer({
                     type="button"
                     title={title}
                     onClick={() => onModeChange(id)}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.16em] transition ${
+                    className={`inline-flex min-w-0 items-center gap-1.5 px-2 py-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.16em] transition sm:px-2.5 ${
                       active
                         ? "bg-[#e0f7ff]/[0.14] text-[#e0f7ff]"
                         : "text-muted-foreground hover:bg-white/[0.04] hover:text-white"
