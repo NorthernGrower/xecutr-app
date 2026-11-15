@@ -46,7 +46,12 @@ function ProjectsDashboard() {
     };
   }, [user]);
 
-  const removeProject = (id) => setProjects((prev) => prev.filter((p) => p.id !== id));
+  // Drop the card at once, then reconcile with the server so a stale entry can
+  // never linger after a delete.
+  const removeProject = (id) => {
+    setProjects((prev) => prev.filter((p) => p.id !== id));
+    refresh();
+  };
 
   // After a push the card picks up its new repo link.
   const refresh = () =>
