@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 import { DefaultCatchBoundary } from "@/components/DefaultCatchBoundary";
 import { NotFound } from "@/components/NotFound";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/lib/AuthContext";
+import { watchChunkErrors } from "@/lib/chunk-reload";
 import { Base44Scripts } from "base44:document";
 import appCss from "@/index.css?url";
 
@@ -36,6 +38,9 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
+  // A script file the page cannot load means this tab is older than the build.
+  useEffect(() => watchChunkErrors(), []);
+
   return (
     <AuthProvider>
       <Outlet />
