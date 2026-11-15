@@ -278,14 +278,16 @@ const chatTurn = async (req, res) => {
     role: m.role || 'user',
     text: m.text || m.content || '',
   }));
-  const lastUser = [...turns].reverse().find((m) => m.role === 'user');
-  if (lastUser) lastUser.text = withMediaReminder(lastUser.text);
-
   // Pasted images ride with the last user turn as data URLs.
+  const lastUser = [...turns].reverse().find((m) => m.role === 'user');
   const images = (Array.isArray(body.images) ? body.images : [])
     .filter((value) => typeof value === 'string' && value.startsWith('data:image/'))
     .slice(0, 3);
   if (images.length && lastUser) lastUser.images = images;
+
+  // The media reminder is for "make me an image"; someone who pasted one is
+  // asking about that picture, not ordering a new one.
+  if (lastUser && !images.length) lastUser.text = withMediaReminder(lastUser.text);
 
   const conversation = turns.filter((m) => m.text || m.images?.length);
   const system = systemPrompt(body, uploadNotes);
