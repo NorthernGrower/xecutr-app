@@ -92,6 +92,12 @@ visible to the person using the product.
 
 ## Phase 3 — Memory and context
 
+- [x] **Pinned project tasks.** Every project shows its own task list directly
+      under the prompt window, the harness keeps it current from `[[task: …]]`
+      and `[[done: …]]` markers in replies, and the list rides with every turn —
+      so context trimming never loses what must not be forgotten. It is editable
+      by hand (add, rename, tick, delete) and is the same AgentTask record the
+      board reads.
 - [ ] **Retrieval instead of dumping.** Embed project files and notes; send the
       best 10 chunks rather than the first 40 files.
 - [ ] **Decision log.** Every plan, approval and escalation stored as a note the
