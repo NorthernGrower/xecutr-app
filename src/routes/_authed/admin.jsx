@@ -7,7 +7,7 @@ import { authQuery } from "@/lib/AuthContext";
 import { adminTrialUsage } from "@/lib/admin";
 import { BUILD } from "@/lib/build";
 import { PUBLISH } from "@/lib/publish";
-import { SITE_KEY } from "@/lib/server-keys";
+import { SITE_KEYS, SITE_KEY_NOTES } from "@/lib/server-keys";
 import { xecutrHealth } from "@/lib/chat";
 
 export const Route = createFileRoute("/_authed/admin")({
@@ -134,46 +134,56 @@ function AdminPage() {
             </div>
           </Card>
 
-          <Card icon={KeyRound} title="provider key (site-wide)">
+          <Card icon={KeyRound} title="provider keys (site-wide)">
             <div className="space-y-3 font-body text-[13px] leading-relaxed text-[#eef3f8]">
-              <p className="text-muted-foreground">{SITE_KEY.intro}</p>
-
-              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de]">
-                {SITE_KEY.provider} · {SITE_KEY.environmentVariable}
+              <p className="text-muted-foreground">
+                A server-side key serves every visitor. Each member's own key under Connections is
+                still used first for that member's turns; a shared key covers everyone else.
               </p>
 
-              <div className="flex items-start gap-2">
-                <code className="max-h-28 min-w-0 flex-1 overflow-auto break-all rounded-sm border border-white/10 bg-black/40 px-2 py-1.5 font-mono text-[10px] leading-relaxed text-[#dfe6ee]">
-                  {SITE_KEY.command}
-                </code>
-                <button
-                  type="button"
-                  onClick={() => copy(SITE_KEY.command, "key")}
-                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-[#e0f7ff]/30 bg-[#e0f7ff]/[0.05] px-2.5 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-[#e0f7ff] transition hover:bg-[#e0f7ff]/[0.14]"
-                >
-                  {copied === "key" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                  {copied === "key" ? "copied" : "copy"}
-                </button>
-              </div>
+              {SITE_KEYS.map((key) => (
+                <div key={key.id} className="space-y-2 border-t border-white/10 pt-3 first:border-0 first:pt-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de]">
+                      {key.provider} · {key.environmentVariable}
+                    </p>
+                    <a
+                      href={key.signupUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="ml-auto font-mono text-[9px] uppercase tracking-[0.14em] text-[#0e7490] underline-offset-2 hover:underline"
+                    >
+                      get a key →
+                    </a>
+                  </div>
+
+                  <div className="flex items-start gap-2">
+                    <code className="max-h-24 min-w-0 flex-1 overflow-auto break-all rounded-sm border border-white/10 bg-black/40 px-2 py-1.5 font-mono text-[10px] leading-relaxed text-[#dfe6ee]">
+                      {key.command}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => copy(key.command, key.id)}
+                      className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-[#e0f7ff]/30 bg-[#e0f7ff]/[0.05] px-2.5 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-[#e0f7ff] transition hover:bg-[#e0f7ff]/[0.14]"
+                    >
+                      {copied === key.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                      {copied === key.id ? "copied" : "copy"}
+                    </button>
+                  </div>
+
+                  <p className="text-[12px] leading-relaxed text-muted-foreground">{key.note}</p>
+                </div>
+              ))}
 
               <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-                replace PASTE_KEY_HERE with the key · check it with {SITE_KEY.check}
+                replace the placeholder with the key · check it with {SITE_KEYS[0].check}
               </p>
 
               <ul className="list-disc space-y-1 pl-5 text-[12.5px] leading-relaxed">
-                {SITE_KEY.notes.map((note) => (
+                {SITE_KEY_NOTES.map((note) => (
                   <li key={note}>{note}</li>
                 ))}
               </ul>
-
-              <a
-                href={SITE_KEY.signupUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-[#0e7490] underline-offset-2 hover:underline"
-              >
-                get a {SITE_KEY.provider} key →
-              </a>
             </div>
           </Card>
 
