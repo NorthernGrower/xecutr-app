@@ -117,6 +117,7 @@ export async function buildTurn(data, context) {
     target: "Web app",
     providerId: data.providerId || "",
     model: await localModel(data),
+    turnId: data.turnId || "",
     allowPaid: false,
     memory,
     files,

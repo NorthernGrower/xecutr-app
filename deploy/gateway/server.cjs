@@ -46,6 +46,9 @@ const BACKEND = new URL(process.env.BASE44_BACKEND || 'https://base44.app');
 const UPLOAD_DIR = '/tmp/xecutr-uploads';
 const MEDIA = new URL(process.env.MEDIA_URL || 'http://127.0.0.1:8090');
 
+/** Turns currently generating, by the id the app sent, so they can be paused. */
+const ACTIVE = new Map();
+
 const BASE44_PREFIXES = [
   '/api/apps/',
   '/api/app-logs/',
@@ -158,13 +161,12 @@ const looksLikeRefusal = (text) => {
  * back so a refusal can be re-run on another model before anything is shown,
  * and the reader never has to unsee it. Past the hedge, deltas go out as they
  * arrive. Provider details live in providers.cjs.
+ *
+ * `signal` belongs to the whole turn, not to this candidate: the browser can
+ * abort it (POST /api/chat/abort) and so can a closed reader, and either must
+ * stop the model rather than let it generate into a dead stream.
  */
-const runCandidate = async (route, { system, messages, res, hedge }) => {
-  // A closed tab must not leave a model generating for minutes on a shared CPU.
-  const abort = new AbortController();
-  const stop = () => abort.abort();
-  res.once('close', stop);
-
+const runCandidate = async (route, { system, messages, res, hedge, signal }) => {
   let full = '';
   let pending = '';
   let emitted = 0;
@@ -191,21 +193,19 @@ const runCandidate = async (route, { system, messages, res, hedge }) => {
   };
 
   try {
-    for await (const delta of providers.streamText(route, { messages, system, signal: abort.signal })) {
+    for await (const delta of providers.streamText(route, { messages, system, signal })) {
       emit(delta);
     }
   } catch (err) {
-    res.off('close', stop);
     return {
-      ok: abort.signal.aborted,
-      aborted: abort.signal.aborted,
+      ok: signal?.aborted,
+      aborted: Boolean(signal?.aborted),
       text: full,
       emitted,
       refusal: false,
       error: err?.message || String(err),
     };
   }
-  res.off('close', stop);
 
   if (!decided) {
     const refusal = looksLikeRefusal(full);
@@ -260,6 +260,14 @@ const chatTurn = async (req, res) => {
   const conversation = turns.filter((m) => m.text);
   const system = systemPrompt(body, uploadNotes);
 
+  // One controller for the whole turn: the browser may pause it, and a closed
+  // reader must not leave a model generating for minutes on a shared CPU.
+  const turnId = typeof body.turnId === 'string' ? body.turnId.slice(0, 64) : '';
+  const abort = new AbortController();
+  const stopTurn = () => abort.abort();
+  res.once('close', stopTurn);
+  if (turnId) ACTIVE.set(turnId, abort);
+
   // Only providers that can answer right now: their own keys on this server,
   // keys the caller supplied for this turn, and keyless gateways that reply.
   const catalogue = await providers.catalog(body.keys || {});
@@ -301,6 +309,7 @@ const chatTurn = async (req, res) => {
       messages: conversation,
       res,
       hedge: index === 0,
+      signal: abort.signal,
     });
 
     if (answer.aborted) break;
@@ -309,6 +318,15 @@ const chatTurn = async (req, res) => {
     // A refusal or a failed turn is not an answer: the next candidate takes it.
     reason = answer.ok ? 'refusal' : 'error';
     previous = route.modelLabel;
+  }
+
+  res.off('close', stopTurn);
+  if (turnId && ACTIVE.get(turnId) === abort) ACTIVE.delete(turnId);
+
+  if (answer?.aborted) {
+    // The person paused the turn (or left): nothing to report, nothing to save.
+    res.end('data: [DONE]\n\n');
+    return;
   }
 
   if (!answer || !answer.ok) {
@@ -328,6 +346,26 @@ const chatTurn = async (req, res) => {
   }
 
   res.end('data: [DONE]\n\n');
+};
+
+/**
+ * Stop a turn the browser is no longer waiting for. The id is the one the app
+ * sent with the turn; an unknown id is simply a no-op.
+ */
+const abortTurn = async (req, res) => {
+  let turnId = '';
+  try {
+    turnId = JSON.parse((await readBody(req)).toString('utf8') || '{}').turnId || '';
+  } catch {
+    turnId = '';
+  }
+
+  const controller = ACTIVE.get(turnId);
+  if (controller) controller.abort();
+  if (turnId) ACTIVE.delete(turnId);
+
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ ok: Boolean(controller) }));
 };
 
 /**
@@ -454,6 +492,8 @@ const server = http.createServer((req, res) => {
     providerCatalogue(req, res);
   } else if (pathname === '/api/uploads' && req.method === 'POST') {
     upload(req, res);
+  } else if (pathname === '/api/chat/abort' && req.method === 'POST') {
+    abortTurn(req, res);
   } else if (pathname === '/api/chat' && req.method === 'POST') {
     chatTurn(req, res);
   } else if (pathname.startsWith('/api/media/') || pathname.startsWith('/media/')) {

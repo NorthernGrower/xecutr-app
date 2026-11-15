@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth-middleware";
 import { providerById } from "@/lib/providers";
 import { buildTurn, readTurn } from "@/lib/gateway.server";
-import { fetchHealth, fetchProviders, forwardableKeys, postChat, postUpload } from "@/lib/xecutr.server";
+import { fetchHealth, fetchProviders, forwardableKeys, postAbort, postChat, postUpload } from "@/lib/xecutr.server";
 
 const MAX_TURN_CHARS = 60000;
 const MAX_ARTIFACT_BYTES = 8 * 1024 * 1024;
@@ -27,6 +27,8 @@ export const turnSchema = z.object({
   model: z.string().max(160).nullish(),
   // "plan" asks for a plan and no file writes; "build" (the default) may build.
   mode: z.enum(["plan", "build"]).optional(),
+  // Pairs this turn with its abort request, so the browser can pause it.
+  turnId: z.string().max(64).optional(),
   attachments: z
     .array(
       z.object({
@@ -56,6 +58,11 @@ export const xecutrCatalog = createServerFn({ method: "POST" })
 
 /** Model server liveness (GET /api/health). */
 export const xecutrHealth = createServerFn({ method: "GET" }).handler(() => fetchHealth());
+
+/** Stop a turn in flight: the gateway aborts the model's stream. */
+export const abortTurn = createServerFn({ method: "POST" })
+  .validator(z.object({ turnId: z.string().min(4).max(64) }))
+  .handler(({ data }) => postAbort(data.turnId));
 
 /** POST /api/uploads — one artifact, forwarded for REA inspection. */
 export const attachArtifact = createServerFn({ method: "POST" })

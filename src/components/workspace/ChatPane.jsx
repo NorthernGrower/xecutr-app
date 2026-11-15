@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Image as ImageIcon, Paperclip, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
+import AnimatedX from "@/components/brand/AnimatedX";
 import Composer from "@/components/workspace/Composer";
 import MessageBubble from "@/components/workspace/MessageBubble";
 import ModelPicker from "@/components/workspace/ModelPicker";
@@ -257,7 +258,7 @@ export default function ChatPane({
     [trial],
   );
 
-  const { messages, send, isLoading, error, attachMedia } = useXecutrChat({
+  const { messages, send, cancel, isLoading, paused, error, attachMedia } = useXecutrChat({
     initialMessages,
     onFiles: writeFiles,
     onMedia: saveGenerated,
@@ -403,8 +404,21 @@ export default function ChatPane({
         ))}
         {isLoading && (
           <div className="flex items-center gap-2 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[#b0c4de]">
-            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[#e0f7ff]" />
-            streaming
+            <AnimatedX size={11} className="text-[#0e7490]" />
+            <span>executing</span>
+            <button
+              type="button"
+              onClick={cancel}
+              className="ml-1 rounded-sm border border-white/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.14em] text-muted-foreground transition hover:border-red-500/40 hover:text-red-600"
+            >
+              pause
+            </button>
+          </div>
+        )}
+        {!isLoading && paused && (
+          <div className="flex items-center gap-2 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+            paused
           </div>
         )}
         <div ref={endRef} />
@@ -441,6 +455,7 @@ export default function ChatPane({
           value={prompt}
           onChange={setPrompt}
           onSubmit={submit}
+          onPause={cancel}
           busy={isLoading}
           mode={mode}
           onModeChange={setMode}

@@ -112,6 +112,19 @@ export async function postChat(body) {
   throw Object.assign(new Error(refusal(res.status, detail)), { status: 502 });
 }
 
+/** POST /api/chat/abort — stop a turn the browser is no longer waiting for. */
+export async function postAbort(turnId) {
+  try {
+    await fetch(`${apiBase()}/api/chat/abort`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ turnId }),
+    });
+  } catch {
+    /* a closed reader stops the turn on the gateway side anyway */
+  }
+}
+
 /** POST /api/uploads — raw bytes, referenced by id in later chat turns. */
 export async function postUpload(bytes, name) {
   const res = await fetch(`${apiBase()}/api/uploads`, {

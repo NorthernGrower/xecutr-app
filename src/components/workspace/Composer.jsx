@@ -1,4 +1,4 @@
-import { ArrowUp, ClipboardList, Hammer, Loader2 } from "lucide-react";
+import { ArrowUp, ClipboardList, Hammer, Square } from "lucide-react";
 
 const MODES = [
   { id: "plan", label: "plan", icon: ClipboardList, title: "Plan only — the AI drafts a plan, nothing is built" },
@@ -10,6 +10,7 @@ export default function Composer({
   value,
   onChange,
   onSubmit,
+  onPause,
   busy = false,
   placeholder = "Describe the project you want to build…",
   footer,
@@ -32,7 +33,7 @@ export default function Composer({
         onKeyDown={(e) => {
           if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSend) onSubmit();
         }}
-        rows={3}
+        rows={5}
         placeholder={placeholder}
         className="w-full resize-none bg-transparent px-4 py-3.5 font-body text-[14px] leading-relaxed text-[#eef3f8] outline-none placeholder:text-[#7e8b99]"
       />
@@ -62,14 +63,26 @@ export default function Composer({
               })}
             </div>
           )}
-          <button
-            type="submit"
-            disabled={!canSend}
-            className="inline-flex shrink-0 items-center gap-2 rounded-sm border border-[#e0f7ff]/35 bg-[#e0f7ff]/[0.06] px-3.5 py-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.16em] text-[#e0f7ff] transition hover:border-[#e0f7ff]/70 hover:bg-[#e0f7ff]/[0.14] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-transparent disabled:text-muted-foreground"
-          >
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowUp className="h-3.5 w-3.5" />}
-            {onModeChange ? (mode === "plan" ? "send plan" : "build") : "build"}
-          </button>
+          {busy ? (
+            <button
+              type="button"
+              onClick={onPause}
+              title="Pause — stop the model working on this answer"
+              className="inline-flex shrink-0 items-center gap-2 rounded-sm border border-[#b0c4de]/35 bg-[#b0c4de]/[0.06] px-3.5 py-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.16em] text-[#b0c4de] transition hover:border-red-500/50 hover:bg-red-500/[0.06] hover:text-red-600"
+            >
+              <Square className="h-3 w-3" fill="currentColor" />
+              pause
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!canSend}
+              className="inline-flex shrink-0 items-center gap-2 rounded-sm border border-[#e0f7ff]/35 bg-[#e0f7ff]/[0.06] px-3.5 py-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.16em] text-[#e0f7ff] transition hover:border-[#e0f7ff]/70 hover:bg-[#e0f7ff]/[0.14] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-transparent disabled:text-muted-foreground"
+            >
+              <ArrowUp className="h-3.5 w-3.5" />
+              {onModeChange ? (mode === "plan" ? "send plan" : "build") : "build"}
+            </button>
+          )}
         </div>
       </div>
     </form>
