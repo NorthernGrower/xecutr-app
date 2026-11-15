@@ -1,12 +1,13 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Activity, Check, Copy, Cpu, Rocket, Shield, Users } from "lucide-react";
+import { Activity, Check, Copy, Cpu, KeyRound, Rocket, Shield, Users } from "lucide-react";
 import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
 import Panel from "@/components/workspace/Panel";
 import { authQuery } from "@/lib/AuthContext";
 import { adminTrialUsage } from "@/lib/admin";
 import { BUILD } from "@/lib/build";
 import { PUBLISH } from "@/lib/publish";
+import { SITE_KEY } from "@/lib/server-keys";
 import { xecutrHealth } from "@/lib/chat";
 
 export const Route = createFileRoute("/_authed/admin")({
@@ -37,7 +38,7 @@ function AdminPage() {
   const [health, setHealth] = useState(null);
   const [usage, setUsage] = useState(null);
   const [usageError, setUsageError] = useState(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState("");
 
   useEffect(() => {
     xecutrHealth().then(setHealth).catch(() => setHealth({ ok: false }));
@@ -46,11 +47,11 @@ function AdminPage() {
       .catch((err) => setUsageError(err?.message || "Could not load usage."));
   }, []);
 
-  const copyCommand = async () => {
+  const copy = async (text, id) => {
     try {
-      await navigator.clipboard.writeText(PUBLISH.command);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(text);
+      setCopied(id);
+      setTimeout(() => setCopied(""), 2000);
     } catch {
       /* clipboard blocked — the command is on screen to select by hand */
     }
@@ -105,11 +106,11 @@ function AdminPage() {
                   </code>
                   <button
                     type="button"
-                    onClick={copyCommand}
+                    onClick={() => copy(PUBLISH.command, "publish")}
                     className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-[#e0f7ff]/30 bg-[#e0f7ff]/[0.05] px-2.5 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-[#e0f7ff] transition hover:bg-[#e0f7ff]/[0.14]"
                   >
-                    {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                    {copied ? "copied" : "copy"}
+                    {copied === "publish" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                    {copied === "publish" ? "copied" : "copy"}
                   </button>
                 </div>
               </div>
@@ -130,6 +131,49 @@ function AdminPage() {
               </div>
 
               <p className="text-[12px] leading-relaxed text-muted-foreground">{PUBLISH.vpsNote}</p>
+            </div>
+          </Card>
+
+          <Card icon={KeyRound} title="provider key (site-wide)">
+            <div className="space-y-3 font-body text-[13px] leading-relaxed text-[#eef3f8]">
+              <p className="text-muted-foreground">{SITE_KEY.intro}</p>
+
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de]">
+                {SITE_KEY.provider} · {SITE_KEY.environmentVariable}
+              </p>
+
+              <div className="flex items-start gap-2">
+                <code className="max-h-28 min-w-0 flex-1 overflow-auto break-all rounded-sm border border-white/10 bg-black/40 px-2 py-1.5 font-mono text-[10px] leading-relaxed text-[#dfe6ee]">
+                  {SITE_KEY.command}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => copy(SITE_KEY.command, "key")}
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-[#e0f7ff]/30 bg-[#e0f7ff]/[0.05] px-2.5 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-[#e0f7ff] transition hover:bg-[#e0f7ff]/[0.14]"
+                >
+                  {copied === "key" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                  {copied === "key" ? "copied" : "copy"}
+                </button>
+              </div>
+
+              <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+                replace PASTE_KEY_HERE with the key · check it with {SITE_KEY.check}
+              </p>
+
+              <ul className="list-disc space-y-1 pl-5 text-[12.5px] leading-relaxed">
+                {SITE_KEY.notes.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
+
+              <a
+                href={SITE_KEY.signupUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-[#0e7490] underline-offset-2 hover:underline"
+              >
+                get a {SITE_KEY.provider} key →
+              </a>
             </div>
           </Card>
 
