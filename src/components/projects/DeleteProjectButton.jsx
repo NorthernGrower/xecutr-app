@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,7 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 /** Removes a project together with the files, turns and memory that belong to it. */
-export default function DeleteProjectButton({ project, onDeleted }) {
+export default function DeleteProjectButton({ project, onDeleted, className }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -40,7 +41,7 @@ export default function DeleteProjectButton({ project, onDeleted }) {
         type="button"
         onClick={() => setOpen(true)}
         title="Delete this project"
-        className="inline-flex items-center gap-1 transition hover:text-red-300"
+        className={cn("inline-flex items-center gap-1 transition hover:text-red-300", className)}
       >
         <Trash2 className="h-3 w-3" strokeWidth={1.6} />
         delete

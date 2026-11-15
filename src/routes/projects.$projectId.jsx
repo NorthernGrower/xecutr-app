@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Eye, Files, MessageSquare } from "lucide-react";
@@ -7,6 +7,7 @@ import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
 import ChatPane from "@/components/workspace/ChatPane";
 import FilePanel from "@/components/workspace/FilePanel";
 import GitHubRepoButton from "@/components/workspace/GitHubRepoButton";
+import DeleteProjectButton from "@/components/projects/DeleteProjectButton";
 import ProjectPreview from "@/components/workspace/ProjectPreview";
 import ProjectRail from "@/components/workspace/ProjectRail";
 import { useAuth } from "@/lib/AuthContext";
@@ -52,6 +53,7 @@ function ProjectWorkspace() {
   const { projectId } = Route.useParams();
   const { mode: searchMode } = Route.useSearch();
   const { user, isLoadingAuth, navigateToLogin } = useAuth();
+  const navigate = useNavigate();
 
   const [project, setProject] = useState(null);
   const [boot, setBoot] = useState([]);
@@ -170,6 +172,11 @@ function ProjectWorkspace() {
 
             <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
               <GitHubRepoButton project={project} onSaved={reload} />
+              <DeleteProjectButton
+                project={project}
+                onDeleted={() => navigate({ to: "/projects" })}
+                className="rounded-sm border border-white/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:border-red-500/40 hover:text-red-600"
+              />
               <button
                 type="button"
                 onClick={() => setPane("chat")}

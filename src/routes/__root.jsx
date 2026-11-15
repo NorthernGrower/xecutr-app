@@ -17,7 +17,7 @@ export const Route = createRootRoute({
         content:
           "xecutr is a provider-agnostic coding agent that turns prompts into working projects, with file output, project memory and your own provider keys.",
       },
-      { name: "theme-color", content: "#0a0a0a" },
+      { name: "theme-color", content: "#f6f8fa" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -46,7 +46,7 @@ function RootComponent() {
 
 function RootDocument({ children }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <head>
         <HeadContent />
       </head>

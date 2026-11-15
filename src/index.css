@@ -4,44 +4,44 @@
 
 @layer base {
   :root {
-    /* xecutr — obsidian canvas, titanium steel, cyan-white edge light */
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 100%;
-    --card: 0 0% 7.1%;
-    --card-foreground: 0 0% 100%;
-    --popover: 0 0% 6.3%;
-    --popover-foreground: 0 0% 100%;
-    --primary: 192 100% 94%;
-    --primary-foreground: 0 0% 4%;
-    --secondary: 0 0% 11%;
-    --secondary-foreground: 0 0% 96%;
-    --muted: 0 0% 11%;
-    --muted-foreground: 0 0% 63%;
-    --accent: 214 45% 78%;
-    --accent-foreground: 0 0% 6%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 214 20% 22%;
-    --input: 214 18% 18%;
-    --ring: 192 90% 80%;
-    --chart-1: 192 90% 80%;
-    --chart-2: 214 45% 78%;
-    --chart-3: 265 70% 70%;
-    --chart-4: 160 60% 55%;
-    --chart-5: 30 80% 60%;
+    /* xecutr — light canvas: paper white, slate ink, teal edge light */
+    --background: 210 25% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 190 90% 30%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 22% 94%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 22% 94%;
+    --muted-foreground: 215 16% 40%;
+    --accent: 190 70% 34%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 190 80% 40%;
+    --chart-1: 190 80% 40%;
+    --chart-2: 215 50% 50%;
+    --chart-3: 265 60% 55%;
+    --chart-4: 160 60% 40%;
+    --chart-5: 30 80% 50%;
     --radius: 0.25rem;
     --font-display: "Chakra Petch", ui-sans-serif, system-ui, sans-serif;
     --font-heading: "Chakra Petch", ui-sans-serif, system-ui, sans-serif;
     --font-body: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-    --sidebar-background: 0 0% 5%;
-    --sidebar-foreground: 0 0% 88%;
-    --sidebar-primary: 192 100% 94%;
-    --sidebar-primary-foreground: 0 0% 4%;
-    --sidebar-accent: 0 0% 10%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 214 20% 18%;
-    --sidebar-ring: 192 90% 80%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 190 90% 30%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 22% 94%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 214 20% 88%;
+    --sidebar-ring: 190 80% 40%;
   }
 
   * {
@@ -49,7 +49,7 @@
   }
 
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   body {
@@ -57,8 +57,8 @@
   }
 
   ::selection {
-    background: rgba(224, 247, 255, 0.2);
-    color: #e0f7ff;
+    background: rgba(14, 116, 144, 0.16);
+    color: #0f172a;
   }
 
   ::-webkit-scrollbar {
@@ -66,14 +66,14 @@
     height: 9px;
   }
   ::-webkit-scrollbar-track {
-    background: #0a0a0a;
+    background: #eef2f6;
   }
   ::-webkit-scrollbar-thumb {
-    background: #23262b;
-    border: 2px solid #0a0a0a;
+    background: #cbd5e1;
+    border: 2px solid #eef2f6;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #3a4048;
+    background: #94a3b8;
   }
 }
 
@@ -81,25 +81,25 @@
   /* faint circuit grid behind panels */
   .grid-bg {
     background-image:
-      linear-gradient(to right, rgba(176, 196, 222, 0.045) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(176, 196, 222, 0.045) 1px, transparent 1px);
+      linear-gradient(to right, rgba(15, 23, 42, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
     background-size: 46px 46px;
   }
 
   .glow-edge {
     box-shadow:
-      0 0 0 1px rgba(176, 196, 222, 0.1),
-      0 0 34px -14px rgba(224, 247, 255, 0.45);
+      0 0 0 1px rgba(15, 23, 42, 0.06),
+      0 14px 34px -22px rgba(15, 23, 42, 0.35);
   }
 
   .glow-edge-strong {
     box-shadow:
-      0 0 0 1px rgba(224, 247, 255, 0.22),
-      0 0 44px -10px rgba(224, 247, 255, 0.4);
+      0 0 0 1px rgba(14, 116, 144, 0.25),
+      0 18px 40px -20px rgba(14, 116, 144, 0.35);
   }
 
   .text-glow {
-    text-shadow: 0 0 24px rgba(224, 247, 255, 0.4);
+    text-shadow: 0 0 24px rgba(14, 116, 144, 0.22);
   }
 
   .label-mono {
@@ -109,10 +109,120 @@
   .scan-line {
     background-image: repeating-linear-gradient(
       to bottom,
-      rgba(255, 255, 255, 0.02) 0px,
-      rgba(255, 255, 255, 0.02) 1px,
+      rgba(15, 23, 42, 0.025) 0px,
+      rgba(15, 23, 42, 0.025) 1px,
       transparent 1px,
       transparent 4px
     );
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Light skin.
+
+   The workspace was drawn on an obsidian canvas, so a large part of it names
+   its colours literally (`bg-[#0b0b0b]`, `text-[#dfe6ee]`, `border-white/10`)
+   instead of going through the CSS variables above. Rewriting forty components
+   to change a palette is not worth the risk, so this block re-points those
+   literals at their light equivalents in one place. Colour roles are kept:
+   ink becomes slate, the cyan edge light becomes teal, panel fills become
+   white, and the red/emerald states stay red and emerald but darken enough to
+   read on paper.
+
+   Rules are unlayered and `!important` so they beat the generated utilities;
+   the more specific punctuation rules come after the general ones.
+   ------------------------------------------------------------------------ */
+
+/* ink */
+[class*="text-[#eef3f8]"],
+[class*="text-[#dfe6ee]"],
+[class*="text-[#c9d3de]"],
+[class*="text-[#c9d4de]"] {
+  color: #1e293b !important;
+}
+[class*="text-[#9aa6b2]"] {
+  color: #64748b !important;
+}
+[class*="text-[#7e8b99]"] {
+  color: #94a3b8 !important;
+}
+[class*="text-[#b0c4de]"] {
+  color: #475569 !important;
+}
+[class*="text-[#e0f7ff]"] {
+  color: #0e7490 !important;
+}
+[class*="text-white"] {
+  color: #0f172a !important;
+}
+
+/* panel fills */
+[class*="bg-[#0b0b0b]"],
+[class*="bg-[#0a0a0a]"],
+[class*="bg-[#0c0c0c]"],
+[class*="bg-[#0d0d0d]"],
+[class*="bg-[#0d0f11]"],
+[class*="bg-[#0b0c0d]"],
+[class*="bg-[#11151a]"],
+[class*="bg-[#121212]"],
+[class*="bg-[#1c2128]"],
+[class*="bg-[#111]"] {
+  background-color: #ffffff !important;
+}
+
+/* the cyan edge light becomes teal */
+[class*="bg-[#e0f7ff]"] {
+  background-color: rgba(14, 116, 144, 0.1) !important;
+}
+[class*="bg-[#b0c4de]"] {
+  background-color: #475569 !important;
+}
+[class*="border-[#e0f7ff]"] {
+  border-color: rgba(14, 116, 144, 0.45) !important;
+}
+[class*="border-[#b0c4de]"] {
+  border-color: rgba(71, 85, 105, 0.35) !important;
+}
+
+/* translucent fills: dark tints become a light slate wash */
+[class*="bg-black/80"] {
+  background-color: rgba(15, 23, 42, 0.45) !important;
+}
+[class*="bg-black/30"],
+[class*="bg-black/40"] {
+  background-color: rgba(15, 23, 42, 0.04) !important;
+}
+[class*="bg-white/"] {
+  background-color: rgba(15, 23, 42, 0.04) !important;
+}
+[class*="bg-white/10"] {
+  background-color: rgba(15, 23, 42, 0.1) !important;
+}
+[class*="border-white/"] {
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+[class*="divide-white/"] > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(15, 23, 42, 0.1) !important;
+}
+
+/* gradient ends drawn for a dark card */
+[class*="to-[#0a0a0a]"],
+[class*="from-[#0b0b0b]"] {
+  --tw-gradient-to: #ffffff !important;
+  --tw-gradient-from: #ffffff !important;
+}
+[class*="shadow-[0_20px_45px"] {
+  box-shadow: 0 16px 34px -26px rgba(15, 23, 42, 0.35) !important;
+}
+
+/* states: dark enough to read on white, and white on red stays white */
+[class*="text-red-300"],
+[class*="text-red-400"] {
+  color: #b91c1c !important;
+}
+[class*="text-emerald-400"] {
+  color: #047857 !important;
+}
+[class*="bg-red-500"] {
+  color: #ffffff !important;
 }
