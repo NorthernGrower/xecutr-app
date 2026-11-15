@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { abortTurn, ask } from "@/lib/chat";
-import { splitMedia, textOfMessage } from "@/lib/text-segments";
+import { splitMedia, splitTasks, textOfMessage } from "@/lib/text-segments";
 
 let seq = 0;
 const nextId = () => `msg-${Date.now()}-${(seq += 1)}`;
@@ -16,7 +16,7 @@ const nextTurnId = () => `turn-${Date.now()}-${Math.random().toString(36).slice(
  * shared CPU stops working on an answer nobody is waiting for) and the empty
  * answer bubble is dropped.
  */
-export default function useXecutrChat({ initialMessages = [], onFiles, onMedia, onFinish }) {
+export default function useXecutrChat({ initialMessages = [], onFiles, onMedia, onTasks, onFinish }) {
   const [messages, setMessages] = useState(initialMessages);
   const [isLoading, setLoading] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -26,6 +26,7 @@ export default function useXecutrChat({ initialMessages = [], onFiles, onMedia, 
     messages: initialMessages,
     onFiles,
     onMedia,
+    onTasks,
     onFinish,
     loading: false,
     turnId: "",
@@ -34,6 +35,7 @@ export default function useXecutrChat({ initialMessages = [], onFiles, onMedia, 
   live.current.messages = messages;
   live.current.onFiles = onFiles;
   live.current.onMedia = onMedia;
+  live.current.onTasks = onTasks;
   live.current.onFinish = onFinish;
 
   /** Generated media lands on the message that asked for it, when it is ready. */
@@ -88,7 +90,9 @@ export default function useXecutrChat({ initialMessages = [], onFiles, onMedia, 
 
       const raw = result?.text || "";
       // Media markers are not prose: they come out of the text and become jobs.
-      const { text: reply, requests } = splitMedia(raw);
+      const { text: withoutMedia, requests } = splitMedia(raw);
+      // Task markers are the harness's memory: they become pinned project tasks.
+      const { text: reply, requests: taskRequests } = splitTasks(withoutMedia);
 
       setMessages((prev) =>
         prev.map((m) =>
@@ -105,6 +109,7 @@ export default function useXecutrChat({ initialMessages = [], onFiles, onMedia, 
       );
 
       if (result?.files?.length) live.current.onFiles?.(result.files);
+      if (taskRequests.length) live.current.onTasks?.(taskRequests);
       // A plan turn generates nothing: the model may still mark media, so the
       // guard lives here rather than trusting the reply.
       const wanted = mode === "plan" ? [] : requests;

@@ -83,6 +83,18 @@ const systemPrompt = (body, uploadNotes) => {
         body.memory.map((n) => `- ${n}`).join('\n'),
     );
   }
+  // The pinned task list is what must not be forgotten when the conversation is
+  // trimmed; the model keeps it current with markers the app turns into records.
+  if (body.tasks?.length) {
+    parts.push(
+      'The project has a pinned task list — the memory that survives when older ' +
+        'messages are trimmed. Keep it current: when the work adds a step that must ' +
+        'not be forgotten, add one line of exactly this shape: [[task: a short ' +
+        'imperative step]] . When a listed task is finished, add one line: ' +
+        '[[done: the exact task text]] . Do not repeat the list back unless asked.\n' +
+        body.tasks.map((t) => `- [${t.status}] ${t.title}${t.note ? ` (${t.note})` : ''}`).join('\n'),
+    );
+  }
   if (body.files?.length) {
     let budget = 120000;
     const blocks = [];

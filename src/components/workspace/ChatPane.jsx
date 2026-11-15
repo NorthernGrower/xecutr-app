@@ -7,6 +7,7 @@ import MessageBubble from "@/components/workspace/MessageBubble";
 import ModelPicker from "@/components/workspace/ModelPicker";
 import PromptHistory from "@/components/workspace/PromptHistory";
 import MediaDialog from "@/components/workspace/MediaDialog";
+import ProjectTasks from "@/components/workspace/ProjectTasks";
 import useXecutrChat from "@/hooks/use-xecutr-chat";
 import useMediaJob from "@/hooks/use-media-job";
 import { attachArtifact, xecutrCatalog } from "@/lib/chat";
@@ -186,6 +187,45 @@ export default function ChatPane({
     [writeFiles],
   );
 
+  /**
+   * The harness's pinned memory: `[[task: …]]` and `[[done: …]]` markers from a
+   * reply become, or close, entries in this project's task list — the list that
+   * rides along with every turn and survives context trimming.
+   */
+  const recordTasks = useCallback(
+    async (requests) => {
+      const pid = projectRef.current;
+      if (!pid || trial || !requests?.length) return;
+
+      const existing = await base44.entities.AgentTask.filter({ project_id: pid }, "created_date", 100);
+      const key = (value) => String(value || "").trim().toLowerCase();
+
+      for (const request of requests) {
+        const title = request.text.trim();
+        if (!title) continue;
+        const match = existing.find((task) => key(task.title) === key(title));
+
+        if (request.kind === "done") {
+          if (match && match.status !== "done") {
+            await base44.entities.AgentTask.update(match.id, { status: "done" });
+          }
+          continue;
+        }
+
+        if (!match) {
+          const created = await base44.entities.AgentTask.create({
+            project_id: pid,
+            title,
+            status: "queued",
+            kind: "build",
+          });
+          existing.push(created);
+        }
+      }
+    },
+    [trial],
+  );
+
   const persist = useCallback(
     async ({ text, provider, model, route }) => {
       const pid = projectRef.current;
@@ -262,6 +302,7 @@ export default function ChatPane({
     initialMessages,
     onFiles: writeFiles,
     onMedia: saveGenerated,
+    onTasks: recordTasks,
     onFinish: (result) => {
       persist(result).catch(() => setNotice("Saved locally only — the project write failed."));
     },
@@ -490,6 +531,8 @@ export default function ChatPane({
             </div>
           }
         />
+
+        {!trial && projectId && <ProjectTasks projectId={projectId} />}
       </div>
 
       {(trial || projectId) && (

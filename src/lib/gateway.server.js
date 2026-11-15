@@ -84,6 +84,7 @@ export async function buildTurn(data, context) {
 
   let files = [];
   let memory = [];
+  let tasks = [];
   if (projectId) {
     try {
       const rows = await base44.entities.ProjectFile.filter({ project_id: projectId }, "path", MAX_CONTEXT_FILES);
@@ -97,9 +98,19 @@ export async function buildTurn(data, context) {
         });
       const notes = await base44.entities.MemoryNote.filter({ project_id: projectId }, "-created_date", 20);
       memory = notes.map((n) => n.note).filter(Boolean);
+
+      // The pinned task list is the memory that survives trimming: it travels
+      // with every turn, oldest first so it reads like a plan.
+      const taskRows = await base44.entities.AgentTask.filter({ project_id: projectId }, "-created_date", 40);
+      tasks = (taskRows || [])
+        .filter((task) => task.title)
+        .slice(0, 30)
+        .map((task) => ({ title: task.title, status: task.status || "queued", note: task.note || "" }))
+        .reverse();
     } catch {
       files = [];
       memory = [];
+      tasks = [];
     }
   }
 
@@ -121,6 +132,7 @@ export async function buildTurn(data, context) {
     allowPaid: false,
     memory,
     files,
+    tasks,
     rea: uploads.length > 0,
     uploads,
     keys: anonymous ? {} : forwardableKeys(data.keys || {}),

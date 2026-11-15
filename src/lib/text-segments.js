@@ -27,6 +27,33 @@ export function splitMedia(text = "") {
 }
 
 /**
+ * The pinned-task markers. The harness keeps a project's task list current from
+ * them, so work that must survive context trimming is written down rather than
+ * remembered by the model.
+ */
+const TASK_MARK = /\[\[\s*task\s*:\s*([^\]]{3,300})\]\]/gi;
+const DONE_MARK = /\[\[\s*done\s*:\s*([^\]]{3,300})\]\]/gi;
+
+/** Pull `[[task: …]]` / `[[done: …]]` markers out of a reply. */
+export function splitTasks(text = "") {
+  const requests = [];
+
+  const withoutTasks = text.replace(TASK_MARK, (_whole, title) => {
+    const clean = title.replace(/\s+/g, " ").trim();
+    if (clean) requests.push({ kind: "task", text: clean });
+    return "";
+  });
+
+  const rest = withoutTasks.replace(DONE_MARK, (_whole, title) => {
+    const clean = title.replace(/\s+/g, " ").trim();
+    if (clean) requests.push({ kind: "done", text: clean });
+    return "";
+  });
+
+  return { text: rest.replace(/\n{3,}/g, "\n\n").trim(), requests };
+}
+
+/**
  * Split an assistant reply into prose, code and file segments.
  * A fence whose header is `file path="…"` is a file, anything else is code.
  */
@@ -69,7 +96,9 @@ export function fileBlocks(text = "") {
 
 /** The reply's prose with fences removed — what gets stored as the message body. */
 export function plainText(text = "") {
-  return splitMedia(text.replace(FENCE, (_m, _h, body) => body)).text.replace(/\n{3,}/g, "\n\n").trim();
+  return splitTasks(splitMedia(text.replace(FENCE, (_m, _h, body) => body)).text).text
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 export function textOfMessage(message) {
