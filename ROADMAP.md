@@ -41,9 +41,10 @@ visible to the person using the product.
 - [x] Gateway picks a model from the prompt when none is pinned (fast default
       vs. routed model for long or heavy turns).
 - [x] Refusal detection: a short apologetic reply is treated as a refusal.
-- [x] Automatic escalation to the local unrestricted model, with the fallback
-      marked in the reply label. Files from the escalated answer land in the
-      project like any other.
+- [x] Automatic escalation to the local **9B abliterated coder**
+      (`huihui_ai/qwen3.5-abliterated:9b-OmniCoder`) — the biggest model this
+      CPU answers in a usable time — with the fallback marked in the reply
+      label. Files from the escalated answer land in the project like any other.
 - [x] **Shared-CPU discipline:** a closed reader aborts its upstream stream (a
       tab no longer leaves a model generating for minutes), and starting a media
       job asks Ollama to unload first so the track or clip gets the whole box.
@@ -56,8 +57,11 @@ visible to the person using the product.
 - [ ] **Cost and latency budget.** Each turn carries a budget; the router picks
       the cheapest model that fits, and escalates only when verification fails.
 - [ ] **Escalation ladder, not a single fallback.**
-      `pinned → routed → local 7B → local abliterated → 27B`, each step recorded
-      with a reason (`refusal`, `timeout`, `test failure`, `context overflow`).
+      `pinned → routed → local 7B → local 9B abliterated (OmniCoder)`, each step
+      recorded with a reason (`refusal`, `timeout`, `test failure`, `context
+      overflow`). The 27B sits outside the ladder on purpose: at this CPU speed a
+      turn on it costs minutes, so it stays a manual pick and is never chosen
+      automatically.
 - [ ] **Refusal corpus.** Store every refusal and escalation (prompt hash, model,
       reason) so routing improves from real traffic.
 - [ ] **UI:** a small "routing" strip on the reply — model, why, and the
@@ -175,5 +179,12 @@ visible to the person using the product.
 - Media works **in projects and standalone** (trial: image and music, no clips).
 - The harness **picks the best model first**, then falls back to the local
   abliterated model when a turn is refused or fails; its files join the project.
+- The local abliterated rung is the **9B coder**
+  (`huihui_ai/qwen3.5-abliterated:9b-OmniCoder`). It is the largest local model
+  that still answers quickly here, and it is what both routing and escalation use
+  today (`OLLAMA_ROUTE_MODEL` and `OLLAMA_FALLBACK_MODEL` on the VPS).
+- The **27B** (`coder:latest`) is not used for routing or fallback: it responds
+  too slowly on this CPU. It stays available as a manual pick in the model list,
+  and can be removed from the list entirely if the owner prefers.
 - Signed-in is the unlimited path; the trial keeps its daily caps.
-- Default model stays the fast local 7B; OmniCoder and the 27B stay pickable.
+- Default model stays the fast local 7B; OmniCoder stays pickable.
