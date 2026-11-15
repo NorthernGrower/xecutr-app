@@ -88,10 +88,14 @@ const systemPrompt = (body, uploadNotes) => {
   if (body.tasks?.length) {
     parts.push(
       'The project has a pinned task list — the memory that survives when older ' +
-        'messages are trimmed. Keep it current: when the work adds a step that must ' +
-        'not be forgotten, add one line of exactly this shape: [[task: a short ' +
-        'imperative step]] . When a listed task is finished, add one line: ' +
-        '[[done: the exact task text]] . Do not repeat the list back unless asked.\n' +
+        'messages are trimmed. It is context to work from, not a question: use it to ' +
+        'stay on track and answer the user normally.\n' +
+        'Only when the work itself adds a new step that must not be forgotten, add one ' +
+        'line of exactly this shape: [[task: a short imperative step]] . Only when a ' +
+        'listed task is genuinely finished, add one line: [[done: the exact task ' +
+        'text]] . Never repeat a task that is already listed, and never add a marker ' +
+        'because the user asked about the list.\n' +
+        'Current tasks:\n' +
         body.tasks.map((t) => `- [${t.status}] ${t.title}${t.note ? ` (${t.note})` : ''}`).join('\n'),
     );
   }
