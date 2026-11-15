@@ -1,8 +1,10 @@
 /**
- * One pickable catalogue. The gateway's live provider list comes first; the
- * shipped PROVIDERS constants top it up so the picker still works when the
- * gateway is unreachable, and so a provider's free model list never disappears
- * just because it needs a key.
+ * One pickable catalogue: exactly what the gateway says it can answer with now.
+ *
+ * There is deliberately no shipped top-up. A provider the gateway does not
+ * report — no key on the server, a keyless gateway that did not reply, a model
+ * its own API no longer lists — is not offered at all, because a model in the
+ * picker that cannot answer is a trap rather than a choice.
  */
 import { PROVIDERS } from "@/lib/providers";
 
@@ -10,11 +12,8 @@ const ALIAS = { google: "gemini" };
 
 const localFor = (id) => PROVIDERS.find((p) => p.id === id || p.id === ALIAS[id]) || null;
 
-const asModels = (provider, local) => {
-  const rows =
-    Array.isArray(provider?.models) && provider.models.length
-      ? provider.models
-      : (local?.models || []).map((id) => ({ id, label: id }));
+const asModels = (provider) => {
+  const rows = Array.isArray(provider?.models) ? provider.models : [];
   return rows
     .filter((m) => (typeof m === "string" ? m : m?.id))
     .map((m) =>
@@ -33,9 +32,9 @@ const normalizeLive = (provider) => {
     status: provider.status || "unknown",
     free: provider.freeTier ?? local?.free ?? false,
     keyless: Boolean(provider.keyless),
-    defaultModel: provider.defaultModel || local?.defaultModel || "",
+    defaultModel: provider.defaultModel || "",
     defaultModelLabel: provider.defaultModelLabel || "",
-    models: asModels(provider, local),
+    models: asModels(provider),
     signupUrl: provider.signupUrl || local?.connect || "",
     note: provider.note || "",
     setupHint: provider.setupHint || "",
@@ -43,34 +42,17 @@ const normalizeLive = (provider) => {
   };
 };
 
-const fromLocal = (local) => ({
-  id: local.id,
-  label: local.label,
-  subtitle: "shipped catalogue",
-  status: "unknown",
-  free: Boolean(local.free),
-  keyless: false,
-  defaultModel: local.defaultModel || "",
-  defaultModelLabel: "",
-  models: asModels(null, local),
-  signupUrl: local.connect || "",
-  note: "",
-  setupHint: "",
-});
-
-/** Ready first, then free, then alphabetical — so OVH's free models stay on top. */
+/** Ready providers with at least one model the gateway actually listed. */
 export function mergeCatalog(catalog) {
-  const live = (catalog?.providers || []).map(normalizeLive);
-  const missing = PROVIDERS.filter(
-    (local) => !live.some((p) => p.id === local.id || p.id === ALIAS[local.id]),
-  ).map(fromLocal);
-
-  return [...live, ...missing].sort(
-    (a, b) =>
-      Number(b.status === "ready") - Number(a.status === "ready") ||
-      Number(b.free) - Number(a.free) ||
-      a.label.localeCompare(b.label),
-  );
+  return (catalog?.providers || [])
+    .map(normalizeLive)
+    .filter((provider) => provider.models.length > 0)
+    .sort(
+      (a, b) =>
+        Number(b.free) - Number(a.free) ||
+        Number(b.keyless) - Number(a.keyless) ||
+        a.label.localeCompare(b.label),
+    );
 }
 
 export const modelLabel = (provider, id) =>

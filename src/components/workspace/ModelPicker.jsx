@@ -13,7 +13,7 @@ export default function ModelPicker({ providers = [], value, onChange, onRefresh
   const [expanded, setExpanded] = useState(value.providerId || providers[0]?.id || "");
 
   const active = providers.find((p) => p.id === value.providerId);
-  const current = active ? `${active.label} · ${modelLabel(active, value.model)}` : "auto · free tiers first";
+  const current = active ? `${active.label} · ${modelLabel(active, value.model)}` : "auto · best available";
 
   const choose = (next) => {
     onChange(next);
@@ -62,14 +62,21 @@ export default function ModelPicker({ providers = [], value, onChange, onRefresh
           >
             <span className="min-w-0 flex-1">
               <span className="block font-display text-[12px] uppercase tracking-[0.08em] text-white">
-                auto · free tiers first
+                auto · best available
               </span>
               <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-                the gateway routes and fails over
+                the strongest connected model answers; refusals fall to the local model
               </span>
             </span>
             {!value.providerId && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#e0f7ff]" />}
           </button>
+
+          {providers.length === 0 && (
+            <p className="px-3 py-3 font-body text-[11.5px] leading-relaxed text-muted-foreground">
+              No model is connected yet. Add a provider key under connections, or pull a model on the
+              server — only models that can answer are listed here.
+            </p>
+          )}
 
           {providers.map((provider) => (
             <ProviderRow

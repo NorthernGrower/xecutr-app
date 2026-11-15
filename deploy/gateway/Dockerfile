@@ -4,6 +4,7 @@ FROM node:22-slim
 
 WORKDIR /gw
 COPY deploy/gateway/server.cjs .
+COPY deploy/gateway/providers.cjs .
 
 ENV PORT=8080
 EXPOSE 8080

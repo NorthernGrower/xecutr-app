@@ -28,11 +28,12 @@ const readBase64 = (file) =>
     reader.readAsDataURL(file);
   });
 
-/** One turn carries at most the pinned provider's own key — never the whole store. */
-const keysFor = (providerId) => {
-  const all = readKeys();
-  return providerId && all[providerId] ? { [providerId]: all[providerId] } : {};
-};
+/**
+ * Every provider key saved on this device, sent once per turn and only over the
+ * encrypted hop. The gateway uses them for the pinned provider and for automatic
+ * routing, then forgets them — nothing is stored server-side.
+ */
+const keysFor = () => readKeys();
 
 const labelFor = (settings, providers) => {
   const provider = providers.find((p) => p.id === settings.providerId);

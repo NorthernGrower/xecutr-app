@@ -217,7 +217,12 @@ docker run -d --name xecutr-media --restart unless-stopped --network host \
 log "Restarting the gateway with the front-end behind it"
 docker stop xecutr >/dev/null 2>&1 || true
 docker rm xecutr >/dev/null 2>&1 || true
+# Hosted provider keys live in this one root-only file, never in the browser.
+GATEWAY_ENV_FILE="${GATEWAY_ENV_FILE:-/root/.xecutr-providers.env}"
+env_args=()
+[ -f "${GATEWAY_ENV_FILE}" ] && env_args=(--env-file "${GATEWAY_ENV_FILE}")
 docker run -d --name xecutr --restart unless-stopped --network host \
+  "${env_args[@]}" \
   -e PORT=8080 \
   -e FRONTEND_URL="$FRONTEND_URL" \
   -e FRONTEND_ORIGIN="http://127.0.0.1:$FRONT_PORT" \

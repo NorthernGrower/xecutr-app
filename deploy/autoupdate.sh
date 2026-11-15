@@ -108,8 +108,14 @@ if printf '%s\n' "${changed}" | grep -q '^deploy/gateway/'; then
     log "Rebuilding the gateway image"
     docker build -f deploy/gateway/Dockerfile -t xecutr . \
         && docker rm -f xecutr >/dev/null 2>&1 || true
+    # A hosted provider key lives in this one file (root-only) and is passed to
+    # the container, never to a browser. Absent file: only local models answer.
+    GATEWAY_ENV_FILE="${GATEWAY_ENV_FILE:-/root/.xecutr-providers.env}"
+    env_args=()
+    [ -f "${GATEWAY_ENV_FILE}" ] && env_args=(--env-file "${GATEWAY_ENV_FILE}")
     [ -n "$(docker images -q xecutr)" ] && docker run -d --name xecutr \
         --restart unless-stopped --network host \
+        "${env_args[@]}" \
         -e PORT=8080 \
         -e FRONTEND_URL="${FRONTEND_URL:-https://xecutr.cloud}" \
         -e FRONTEND_ORIGIN="http://127.0.0.1:8082" \

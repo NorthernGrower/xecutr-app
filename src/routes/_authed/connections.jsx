@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Check, ExternalLink, Loader2 } from "lucide-react";
 import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
 import Panel from "@/components/workspace/Panel";
-import { discoverModels, xecutrHealth } from "@/lib/chat";
+import { discoverModels, xecutrCatalog, xecutrHealth } from "@/lib/chat";
 import GitHubConnectionCard from "@/components/workspace/GitHubConnectionCard";
 import {
   PROVIDERS,
@@ -43,10 +43,19 @@ function ProviderRow({ provider }) {
     setSaved(true);
     setBusy(true);
     try {
-      const res = await discoverModels({ data: { providerId: provider.id, apiKey: trimmed } });
-      if (res.models?.length) {
-        setModels(res.models);
-        saveModelCache(provider.id, res.models);
+      // The gateway owns discovery: it knows each provider's own model endpoint
+      // and which entries are chat models, so this is the honest list.
+      const res = await xecutrCatalog({ data: { keys: readKeys() } });
+      const live = (res?.providers || []).find((row) => row.id === provider.id);
+      if (live?.models?.length) {
+        setModels(live.models);
+        saveModelCache(provider.id, live.models);
+      } else {
+        const fallback = await discoverModels({ data: { providerId: provider.id, apiKey: trimmed } }).catch(() => null);
+        if (fallback?.models?.length) {
+          setModels(fallback.models);
+          saveModelCache(provider.id, fallback.models);
+        }
       }
     } catch {
       /* discovery is optional */
