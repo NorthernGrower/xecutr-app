@@ -104,10 +104,32 @@ const systemPrompt = (body, uploadNotes) => {
       'not the code: for images and clips the weather, light, colours, subject and style, ' +
       'and for music the genre, instruments, tempo and mood. Use at most one marker per reply, ' +
       'and only when the user asked for media: images take seconds, music about a minute, ' +
-      'clips take minutes.',
+      'clips take minutes. For example, asked for calm music for a landing page, reply: ' +
+      '"A calm bed for the page.\n[[music: soft piano and warm strings, 70 bpm, hopeful, cinematic]]"',
   );
   if (uploadNotes.length) parts.push(uploadNotes.join('\n'));
   return parts.filter(Boolean).join('\n\n');
+};
+
+/** A word in the user's own message that asks for a generated asset. */
+const MEDIA_INTENT =
+  /\b(music|song|soundtrack|sound track|jingle|track|beat|image|picture|illustration|logo|icon|artwork|clip|video|animation)\b/i;
+
+/**
+ * A 7B follows a rule placed next to the question much better than one buried
+ * in a long system prompt — and it tends to answer "I will generate…" instead
+ * of emitting the marker, so the reminder names that mistake explicitly.
+ */
+const MEDIA_REMINDER =
+  '\n\n[MEDIA TOOL] The user asked for a generated asset. Reply with at most two sentences, ' +
+  'then one final line of exactly this form: [[image: ...]] or [[video: ...]] or [[music: ...]], ' +
+  'filled with a concrete description (for music: genre, instruments, tempo, mood). ' +
+  'Do not say you will generate it, do not explain the marker, and do not repeat these rules — ' +
+  'the app makes the file from that line.';
+
+const withMediaReminder = (text) => {
+  if (!MEDIA_INTENT.test(text) || text.includes('[MODE: PLAN ONLY]')) return text;
+  return `${text}${MEDIA_REMINDER}`;
 };
 
 /** Everything the gateway needs to say before the model's first token. */
@@ -148,9 +170,13 @@ const chatTurn = async (req, res) => {
     }
   }
 
+  const turns = (body.messages || []).map((m) => ({ role: m.role || 'user', content: m.text || '' }));
+  const lastUser = [...turns].reverse().find((m) => m.role === 'user');
+  if (lastUser) lastUser.content = withMediaReminder(lastUser.content);
+
   const messages = [
     { role: 'system', content: systemPrompt(body, uploadNotes) },
-    ...(body.messages || []).map((m) => ({ role: m.role || 'user', content: m.text || '' })),
+    ...turns,
   ].filter((m) => m.content);
 
   try {
