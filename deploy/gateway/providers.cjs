@@ -197,12 +197,6 @@ const looksLikeChatModel = (id) => {
   return !NON_CHAT_TERMS.some((term) => value.includes(term));
 };
 
-const prettyName = (raw) =>
-  String(raw || '')
-    .replace(/^models\//, '')
-    .replace(/[-_/]/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-
 const listed = (payload, note) => {
   const list = Array.isArray(payload)
     ? payload
@@ -216,7 +210,9 @@ const listed = (payload, note) => {
     .map((model) => {
       const id = typeof model?.id === 'string' ? model.id : model?.name;
       if (typeof id !== 'string' || !id) return null;
-      const label = typeof model?.name === 'string' && model.name !== id ? model.name : prettyName(id);
+      // The provider's own id is the honest label — a prettifier turns
+      // "gpt-oss-120b" into "Gpt Oss 120b", which reads worse than the id.
+      const label = typeof model?.name === 'string' && model.name ? model.name : id;
       return { id, label, note };
     })
     .filter(Boolean)
@@ -239,7 +235,7 @@ const modelsRequest = (provider, apiKey) => {
         extract: (payload) =>
           (Array.isArray(payload?.data) ? payload.data : [])
             .filter((model) => typeof model?.id === 'string')
-            .map((model) => ({ id: model.id, label: prettyName(model.id.replace(/^.*\//, '')), note: 'your account' })),
+            .map((model) => ({ id: model.id, label: model.id, note: 'your account' })),
       };
     case 'google':
       return {
@@ -255,7 +251,7 @@ const modelsRequest = (provider, apiKey) => {
             )
             .map((model) => ({
               id: model.name.replace(/^models\//, ''),
-              label: model.displayName || prettyName(model.name),
+              label: model.displayName || model.name.replace(/^models\//, ''),
               note: 'your account',
             })),
       };
@@ -270,7 +266,7 @@ const modelsRequest = (provider, apiKey) => {
         extract: (payload) =>
           (Array.isArray(payload?.data) ? payload.data : [])
             .filter((model) => typeof model?.id === 'string')
-            .map((model) => ({ id: model.id, label: model.display_name || prettyName(model.id), note: 'paid' })),
+            .map((model) => ({ id: model.id, label: model.display_name || model.id, note: 'paid' })),
       };
     case 'github':
       return {

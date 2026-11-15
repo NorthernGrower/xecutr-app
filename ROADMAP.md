@@ -48,9 +48,12 @@ visible to the person using the product.
 - [x] **Shared-CPU discipline:** a closed reader aborts its upstream stream (a
       tab no longer leaves a model generating for minutes), and starting a media
       job asks Ollama to unload first so the track or clip gets the whole box.
-- [ ] **Provider-aware routing.** Route to the user's own keys (OpenAI,
-      Anthropic, Google, Groq, Cerebras, OpenRouter, OVH…) with a per-provider
-      capability table (context, tool support, cost per 1k, latency class).
+- [x] **Provider-aware routing.** The old Xecutr repo's provider APIs are part
+      of this gateway (`deploy/gateway/providers.cjs`): Google, Groq, Cerebras,
+      Mistral, Z.ai, OpenRouter free variants, LLM7.io, GitHub Models, keyless
+      OVHcloud, paid Anthropic and local Ollama, with OpenAI, Gemini and
+      Anthropic streaming. Keys come from the person's own Connection or from a
+      root-only env file on the server. Only providers that answer are listed.
 - [ ] **Task classifier.** One cheap local pass that labels the turn: `code`,
       `design`, `research`, `media`, `ops`, `chat`. Routing uses the label, not
       only prompt length.
@@ -163,7 +166,7 @@ visible to the person using the product.
 
 - [ ] Browser test of the media panel and the routing labels (last unchecked
       manual step from the previous session).
-- [ ] Multi-provider routing with keys (Phase 1) — the biggest single jump.
+- [x] Multi-provider routing with keys (Phase 1) — the biggest single jump.
 - [ ] Sandboxed build + test after a build turn (Phase 2) — the second biggest.
 - [ ] Media gallery per project with delete/regenerate (Phase 5).
 - [ ] Assets by reference instead of base64 (Phase 5).
@@ -193,5 +196,13 @@ visible to the person using the product.
   and the escalation trail when the local abliterated model took over. The
   reasons come from the gateway itself, so the strip cannot drift from what
   actually happened.
+- **Only models that answer are listed.** The gateway asks each provider for its
+  own model list (cached ten minutes) and drops anything that is not a chat
+  model. A provider with no key, or one whose API did not reply, is not shown at
+  all — the picker never offers a model that cannot work.
+- Provider keys can live in **Connections** (this device, sent once per turn) or
+  in `/root/.xecutr-providers.env` on the server (root-only, passed to the
+  gateway container). Automatic routing tries a keyed provider first, then this
+  server's models, then a keyless gateway.
 - Signed-in is the unlimited path; the trial keeps its daily caps.
 - Default model stays the fast local 7B; OmniCoder stays pickable.
