@@ -210,6 +210,13 @@ visible to the person using the product.
   own model list (cached ten minutes) and drops anything that is not a chat
   model. A provider with no key, or one whose API did not reply, is not shown at
   all — the picker never offers a model that cannot work.
+- **Routing order:** the fastest hosted provider that can answer goes first — a
+  provider connected with a key, then a keyless gateway — and the chain walks
+  down by speed. This server's models are the last resort, so a refusal or an
+  error from a hosted model lands on the local one, unrestricted work included.
+  The reply's strip names the model and why it was chosen.
+- A **visible timer** runs beside `executing` while a turn is in flight, because
+  a local model can take a minute and a silent spinner reads as a frozen page.
 - Provider keys can live in **Connections** (this device, sent once per turn) or
   in `/root/.xecutr-providers.env` on the server (root-only, passed to the
   gateway container). Automatic routing tries a keyed provider first, then this

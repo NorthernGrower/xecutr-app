@@ -68,6 +68,7 @@ export default function ChatPane({
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [notice, setNotice] = useState(null);
   const [mediaOpen, setMediaOpen] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
 
   // Gateway catalogue plus the shipped provider/models list, so every free
   // model (OVH included) is pickable even before the catalogue answers.
@@ -322,6 +323,18 @@ export default function ChatPane({
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
 
+  // A visible clock: a local model can take a minute, and a silent spinner looks
+  // like a frozen page.
+  useEffect(() => {
+    if (!isLoading) {
+      setElapsed(0);
+      return undefined;
+    }
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 500);
+    return () => clearInterval(timer);
+  }, [isLoading]);
+
   useEffect(() => {
     if (pendingPrompt && !sentPending.current && !isLoading) {
       sentPending.current = true;
@@ -491,7 +504,8 @@ export default function ChatPane({
           <div className="flex items-center gap-2 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[#b0c4de]">
             <AnimatedX size={11} className="text-[#0e7490]" />
             <span>executing</span>
-            <span className="text-muted-foreground/70">· runs on the server</span>
+            <span className="tabular-nums text-muted-foreground/80">{elapsed}s</span>
+            <span className="hidden text-muted-foreground/60 sm:inline">· runs on the server</span>
             <button
               type="button"
               onClick={cancel}

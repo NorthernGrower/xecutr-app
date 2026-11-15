@@ -365,6 +365,24 @@ const bestModel = (models) =>
   [...models].sort((a, b) => scoreModel(b.id) - scoreModel(a.id))[0] || null;
 
 /**
+ * How quickly each provider tends to answer; lower is tried first. It is a
+ * preference, not a measurement: keyed accounts are usually faster than the
+ * shared keyless tiers, which sit at the bottom of the list.
+ */
+const SPEED = {
+  anthropic: 0,
+  groq: 1,
+  cerebras: 2,
+  google: 3,
+  mistral: 4,
+  openrouter: 5,
+  zai: 6,
+  github: 7,
+  llm7: 8,
+  ovh: 9,
+};
+
+/**
  * Models that can actually look at a picture. When someone pastes an image the
  * harness prefers one of these, because a text-only model would answer about a
  * picture it never received.
@@ -433,14 +451,15 @@ async function catalog(clientKeys) {
  * The routes to try for one turn, strongest first.
  *
  * Order, and why:
- *   1. a provider the person connected with their own key — their account, their
- *      limits, and the strongest models available to them;
- *   2. this server's own Ollama models, which are free, private and fast here;
- *   3. a keyless shared gateway, only when neither of the above exists.
+ *   1. the fastest hosted provider the deployment can reach — a connected
+ *      provider's own account first, then a keyless shared gateway — walking
+ *      down by how quickly each one answers;
+ *   2. this server's own models, last: the fast one, then the abliterated one.
  *
- * The local abliterated model is always the last resort, marked escalated, so a
- * refusal from a hosted provider still produces working files in the project.
- * `reason` is what the reply's routing strip shows, so it has to be true.
+ * The local models are the last resort on purpose. A refusal or an error from a
+ * hosted provider falls through the chain and lands on the local server, which
+ * is what keeps unrestricted work possible; `reason` is what the reply's
+ * routing strip shows, so it has to be true.
  */
 function candidates({ providerId, model, clientKeys, catalogue, hasImages = false }) {
   const listed_ = catalogue?.providers || [];
@@ -468,63 +487,59 @@ function candidates({ providerId, model, clientKeys, catalogue, hasImages = fals
       const picked = vision || chosen;
       return [
         route(provider, picked, blind && vision ? 'vision for the image' : 'pinned by you'),
-        ...localFallback(picked.id, hasImages),
+        ...localChain(hasImages, picked.id),
       ];
     }
   }
 
-  const keyed = listed_.filter((p) => !p.local && !p.paid && p.keyed);
-  const local = listed_.find((p) => p.local);
-  const keyless = listed_.filter((p) => !p.local && !p.paid && !p.keyed);
+  const hosted = listed_
+    .filter((p) => !p.local && !p.paid)
+    .sort((a, b) => (SPEED[a.id] ?? 50) - (SPEED[b.id] ?? 50));
 
-  const routes = [];
+  const routes = hosted
+    .slice(0, 3)
+    .map((provider, index) =>
+      route(provider, chooseModel(provider, hasImages), index === 0 ? 'fastest available' : 'next fastest'),
+    );
 
-  if (keyed.length) {
-    keyed.slice(0, 2).forEach((provider, index) => {
-      routes.push(
-        route(provider, chooseModel(provider, hasImages), index === 0 ? 'best available' : 'next best available'),
-      );
-    });
-  } else if (local) {
-    // The fast local model answers first when nothing hosted is connected;
-    // the abliterated one is still the fallback below.
-    const preferred = process.env.OLLAMA_MODEL || '';
-    const chosen =
-      (!hasImages && local.models.find((m) => m.id === preferred)) || chooseModel(local, hasImages);
-    routes.push(route(local, chosen, 'best model on this server'));
-  }
-
-  if (local && routes.length) routes.push(...localFallback(routes[0].model, hasImages));
-  else if (!routes.length && keyless.length) {
-    routes.push(route(keyless[0], chooseModel(keyless[0], hasImages), 'keyless gateway'));
-  }
-
-  return routes;
+  return [...routes, ...localChain(hasImages, routes[routes.length - 1]?.model)];
 }
 
-/** The local abliterated model: whatever this host actually has pulled. */
-function localFallback(afterModel, hasImages = false) {
+/**
+ * This server's models, last in the chain: the fast one first, then the
+ * abliterated one. `afterModel` is the model that just failed or refused, so a
+ * refusal from a hosted provider really does land here.
+ */
+function localChain(hasImages, afterModel) {
   const local = catalogs.get('ollama');
   const models = local?.models || [];
   if (!models.length) return [];
 
+  const fastId = process.env.OLLAMA_MODEL || '';
   const fallbackId = process.env.OLLAMA_FALLBACK_MODEL || '';
-  const chosen =
-    (!hasImages && models.find((m) => m.id === fallbackId)) ||
-    chooseModel({ models }, hasImages);
-  if (!chosen || chosen.id === afterModel) return [];
+  const vision = hasImages ? visionModel(models) : null;
 
-  return [
-    {
+  const fast =
+    (hasImages ? vision : models.find((m) => m.id === fastId)) ||
+    (hasImages ? models.find((m) => m.id === fastId) : null) ||
+    bestModel(models);
+
+  const fallback = models.find((m) => m.id === fallbackId) || (hasImages ? vision : null);
+
+  const picks = [fast, fallback].filter((model, index, all) => model && all.indexOf(model) === index);
+  const escalated = Boolean(afterModel);
+
+  return picks
+    .filter((model) => model.id !== afterModel)
+    .map((model, index) => ({
       id: 'ollama',
-      name: 'Local fallback',
+      name: index === 0 && !escalated ? 'Ollama (this server)' : 'Local fallback',
       key: '',
-      model: chosen.id,
-      modelLabel: chosen.label,
-      reason: 'local fallback',
-      escalated: true,
-    },
-  ];
+      model: model.id,
+      modelLabel: model.label,
+      reason: index === 0 && !escalated ? 'local model' : 'local fallback',
+      escalated,
+    }));
 }
 
 /* -------------------------------------------------------------- streaming */

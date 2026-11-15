@@ -13,7 +13,7 @@ export default function ModelPicker({ providers = [], value, onChange, onRefresh
   const [expanded, setExpanded] = useState(value.providerId || providers[0]?.id || "");
 
   const active = providers.find((p) => p.id === value.providerId);
-  const current = active ? `${active.label} · ${modelLabel(active, value.model)}` : "auto · best available";
+  const current = active ? `${active.label} · ${modelLabel(active, value.model)}` : "auto · fastest first";
 
   const choose = (next) => {
     onChange(next);
@@ -62,10 +62,10 @@ export default function ModelPicker({ providers = [], value, onChange, onRefresh
           >
             <span className="min-w-0 flex-1">
               <span className="block font-display text-[12px] uppercase tracking-[0.08em] text-white">
-                auto · best available
+                auto · fastest first
               </span>
               <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-                the strongest connected model answers; refusals fall to the local model
+                hosted models answer first, walking down by speed; refusals go to this server
               </span>
             </span>
             {!value.providerId && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#e0f7ff]" />}
