@@ -420,7 +420,7 @@ export default function ChatPane({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="min-h-0 flex-1 space-y-3 overflow-auto px-1 py-4 sm:px-2">
+      <div className="min-h-0 flex-1 space-y-3 overflow-auto overscroll-contain px-1 py-4 sm:px-2">
         {messages.length === 0 && (
           <div className="mx-auto max-w-md py-10 text-center">
             <p className="label-mono">ready</p>

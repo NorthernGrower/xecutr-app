@@ -3,6 +3,17 @@ import { Check, ChevronDown, ListTodo, Pencil, Plus, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { cn } from "@/lib/utils";
 
+const OPEN_STORE = "xecutr:tasks-open";
+
+/** Expanded on a wide screen, folded away on a phone — and remembered per device. */
+const initialOpen = () => {
+  if (typeof window === "undefined") return true;
+  const stored = window.localStorage.getItem(OPEN_STORE);
+  if (stored === "0") return false;
+  if (stored === "1") return true;
+  return window.matchMedia("(min-width: 640px)").matches;
+};
+
 /**
  * The project's pinned task list, directly under the prompt window.
  *
@@ -14,7 +25,7 @@ import { cn } from "@/lib/utils";
 export default function ProjectTasks({ projectId }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(initialOpen);
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(null);
   const [editDraft, setEditDraft] = useState("");
@@ -88,8 +99,19 @@ export default function ProjectTasks({ projectId }) {
     <div className="mt-2 overflow-hidden rounded-sm border border-white/10 bg-card/60">
       <button
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() =>
+          setOpen((prev) => {
+            const next = !prev;
+            try {
+              window.localStorage.setItem(OPEN_STORE, next ? "1" : "0");
+            } catch {
+              /* storage unavailable */
+            }
+            return next;
+          })
+        }
         aria-expanded={open}
+        aria-label="Show or hide the pinned tasks"
         className="flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-white/[0.03]"
       >
         <ListTodo className="h-3 w-3 shrink-0 text-[#b0c4de]" strokeWidth={1.6} />

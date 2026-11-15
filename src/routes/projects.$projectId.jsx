@@ -128,7 +128,7 @@ function ProjectWorkspace() {
         </aside>
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col border-white/[0.07] sm:border-x">
-          <div className="flex items-center gap-3 border-b border-white/[0.07] px-4 py-2.5">
+          <div className="flex flex-wrap items-center gap-2 border-b border-white/[0.07] px-3 py-2 sm:px-4 sm:py-2.5">
             {renaming ? (
               <form
                 onSubmit={async (e) => {
@@ -188,7 +188,7 @@ function ProjectWorkspace() {
                 }`}
               >
                 <MessageSquare className="h-3.5 w-3.5" strokeWidth={1.6} />
-                chat
+                <span className="hidden sm:inline">chat</span>
               </button>
               <button
                 type="button"
@@ -201,7 +201,7 @@ function ProjectWorkspace() {
                 }`}
               >
                 <Eye className="h-3.5 w-3.5" strokeWidth={1.6} />
-                preview
+                <span className="hidden sm:inline">preview</span>
               </button>
               <button
                 type="button"
@@ -214,7 +214,7 @@ function ProjectWorkspace() {
                 }`}
               >
                 <Files className="h-3.5 w-3.5" strokeWidth={1.6} />
-                files
+                <span className="hidden sm:inline">files</span>
               </button>
             </div>
           </div>
@@ -235,8 +235,8 @@ function ProjectWorkspace() {
             <ProjectPreview project={project} files={files} />
           </div>
 
-          <div className="min-h-0 flex-1 px-3 pb-3 md:hidden">
-            {pane === "files" && (
+          {pane === "files" && (
+            <div className="min-h-0 flex-1 px-3 pb-3 md:hidden">
               <FilePanel
                 project={project}
                 files={files}
@@ -245,8 +245,8 @@ function ProjectWorkspace() {
                 onRefresh={reload}
                 onPreview={() => setPane("preview")}
               />
-            )}
-          </div>
+            </div>
+          )}
         </main>
 
         <aside className="hidden w-[300px] shrink-0 border-l border-white/[0.07] md:block lg:w-[340px]">
