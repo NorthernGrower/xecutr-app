@@ -44,6 +44,9 @@ visible to the person using the product.
 - [x] Automatic escalation to the local unrestricted model, with the fallback
       marked in the reply label. Files from the escalated answer land in the
       project like any other.
+- [x] **Shared-CPU discipline:** a closed reader aborts its upstream stream (a
+      tab no longer leaves a model generating for minutes), and starting a media
+      job asks Ollama to unload first so the track or clip gets the whole box.
 - [ ] **Provider-aware routing.** Route to the user's own keys (OpenAI,
       Anthropic, Google, Groq, Cerebras, OpenRouter, OVH…) with a per-provider
       capability table (context, tool support, cost per 1k, latency class).
@@ -112,11 +115,14 @@ visible to the person using the product.
       the sandbox), fetch URL, generate media, inspect image, query docs.
 - [ ] **Tool permissions per project.** A project declares what the harness may
       touch; writes outside are refused before they happen.
-- [ ] **Media as first-class assets.** Gallery per project, regenerate, delete,
-      and assets stored by reference (not as base64 in a database field).
-- [ ] **Standalone media.** The media tool works signed-out (already: image and
-      short music, 3 a day) and, next, without a project at all: a scratch
-      workspace that can later be promoted into a project.
+- [x] **Media as first-class assets.** Music renders 5 s to 8 min in 30 s
+      windows (crossfaded, MP3 out); images, clips and tracks are saved into the
+      project and play in the chat.
+- [ ] Media gallery per project, regenerate and delete, and assets stored by
+      reference (not as base64 in a database field).
+- [x] **Standalone media.** The media tool works signed-out (image and short
+      music, three a day, no clips). Next: a scratch workspace with no project
+      at all that can later be promoted into one.
 
 ## Phase 6 — Multi-agent
 
