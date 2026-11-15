@@ -226,3 +226,9 @@
 [class*="bg-red-500"] {
   color: #ffffff !important;
 }
+
+/* code reads better on a faint grey than on pure white */
+pre[class*="bg-[#"],
+pre[class*="bg-black/"] {
+  background-color: #f1f5f9 !important;
+}
