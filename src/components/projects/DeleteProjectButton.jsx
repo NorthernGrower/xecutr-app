@@ -13,25 +13,45 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-/** Removes a project together with the files, turns and memory that belong to it. */
+/**
+ * Removes a project, then tidies up the records that belong to it.
+ *
+ * The project is deleted first and on its own: whatever happens to the child
+ * clean-up below, the card must leave the list. Before, one failing cascade call
+ * (a helper the SDK did not have, a rule that refused it) threw before the
+ * project itself was touched, so the project stayed and nothing said why.
+ */
 export default function DeleteProjectButton({ project, onDeleted, className }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
 
   const remove = async () => {
     if (busy || !project?.id) return;
     setBusy(true);
+    setError(null);
+
     try {
-      const owned = { project_id: project.id };
-      await base44.entities.ProjectFile.deleteMany(owned);
-      await base44.entities.Message.deleteMany(owned);
-      await base44.entities.MemoryNote.deleteMany(owned);
-      await base44.entities.AgentTask.deleteMany(owned);
       await base44.entities.Project.delete(project.id);
-      setOpen(false);
-      onDeleted?.(project.id);
-    } finally {
+    } catch (err) {
+      setError(err?.message || "The project could not be deleted. Try again.");
       setBusy(false);
+      return;
+    }
+
+    // Gone on the server: let the list drop it before anything else can fail.
+    onDeleted?.(project.id);
+    setOpen(false);
+    setBusy(false);
+
+    // Best effort only — a leftover record is harmless, a stuck project is not.
+    const owned = { project_id: project.id };
+    for (const entity of ["ProjectFile", "Message", "MemoryNote", "AgentTask", "PreviewSession"]) {
+      try {
+        await base44.entities[entity]?.deleteMany?.(owned);
+      } catch {
+        /* the project is already gone; this is only housekeeping */
+      }
     }
   };
 
@@ -39,7 +59,10 @@ export default function DeleteProjectButton({ project, onDeleted, className }) {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setError(null);
+          setOpen(true);
+        }}
         title="Delete this project"
         className={cn("inline-flex items-center gap-1 transition hover:text-red-300", className)}
       >
@@ -56,6 +79,11 @@ export default function DeleteProjectButton({ project, onDeleted, className }) {
             <AlertDialogDescription className="font-body text-[12.5px] leading-relaxed text-muted-foreground">
               Its files, conversation and memory are removed too. This cannot be undone.
             </AlertDialogDescription>
+            {error && (
+              <p className="mt-2 rounded-sm border border-red-500/30 bg-red-500/[0.07] px-2.5 py-1.5 font-body text-[12px] leading-relaxed text-red-300">
+                {error}
+              </p>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-sm font-display text-[10px] uppercase tracking-[0.16em]">
