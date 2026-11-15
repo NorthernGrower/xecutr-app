@@ -173,17 +173,33 @@ const pickModel = (body, requested) => {
  * they arrive.
  */
 const upstreamTurn = async ({ model, messages, res, hedge }) => {
+  // A closed tab must not leave a model generating for minutes on a shared CPU.
+  const abort = new AbortController();
+  const stop = () => abort.abort();
+  res.once('close', stop);
+
   let upstream;
   try {
     upstream = await fetch(`${OLLAMA}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, messages, stream: true }),
+      signal: abort.signal,
     });
   } catch (err) {
-    return { ok: false, status: 0, text: '', emitted: 0, refusal: false, error: err?.message || String(err) };
+    res.off('close', stop);
+    return {
+      ok: abort.signal.aborted,
+      aborted: abort.signal.aborted,
+      status: 0,
+      text: '',
+      emitted: 0,
+      refusal: false,
+      error: err?.message || String(err),
+    };
   }
   if (!upstream.ok || !upstream.body) {
+    res.off('close', stop);
     return { ok: false, status: upstream.status, text: '', emitted: 0, refusal: false };
   }
 
@@ -249,8 +265,17 @@ const upstreamTurn = async ({ model, messages, res, hedge }) => {
       }
     }
   } catch (err) {
-    return { ok: true, text: full, emitted, refusal: false, error: err?.message || String(err) };
+    res.off('close', stop);
+    return {
+      ok: abort.signal.aborted,
+      aborted: abort.signal.aborted,
+      text: full,
+      emitted,
+      refusal: false,
+      error: err?.message || String(err),
+    };
   }
+  res.off('close', stop);
 
   if (!decided) {
     const refusal = looksLikeRefusal(full);
@@ -391,10 +416,39 @@ const upload = async (req, res) => {
 };
 
 /**
+ * Free the LLM's RAM before a generation job. Ollama keeps a model resident for
+ * minutes after a turn, and on a CPU-only box a resident 5-6 GB model takes most
+ * of the cores the media service is about to need. The next chat turn reloads.
+ */
+const unloadModels = async () => {
+  const base = OLLAMA.replace(/\/v1\/?$/, '');
+  try {
+    const ps = await fetch(`${base}/api/ps`);
+    if (!ps.ok) return;
+    const body = await ps.json();
+    await Promise.all(
+      (body?.models || []).map((m) =>
+        fetch(`${base}/api/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: m.name, keep_alive: 0 }),
+        }).catch(() => null),
+      ),
+    );
+  } catch {
+    /* the generation still works, just slower */
+  }
+};
+
+/**
  * The media service is reached on the host loopback; its own paths are the
  * public ones, so this is a straight pass-through — JSON in, JSON or bytes out.
  */
-const mediaProxy = (pathname, req, res) => {
+const mediaProxy = async (pathname, req, res) => {
+  if (req.method === 'POST' && pathname === '/api/media/jobs') {
+    await Promise.race([unloadModels(), new Promise((resolve) => setTimeout(resolve, 2000))]);
+  }
+
   const upstream = http.request(
     {
       hostname: MEDIA.hostname,
