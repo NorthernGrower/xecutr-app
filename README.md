@@ -25,6 +25,24 @@ npm run build         # -> dist/client (assets) + dist/server (the Worker)
 base44 deploy         # or publish from the Base44 builder
 ```
 
+## Updating the live Base44 site
+
+The live copy is a Base44 deployment of this repository, so it only changes
+when Base44 builds the current `main`:
+
+1. Open the app in the **Base44 builder** → **Deploy / Publish** (or sync the
+   GitHub repository first if the builder is behind).
+2. Or, from a machine with the Base44 CLI signed in: `base44 deploy`.
+3. Open `https://<your-live-site>/admin` and read **app build** — the label in
+   `src/lib/build.js`. Bump that string in the same commit as any change you
+   publish, and the page tells you whether the live site caught up.
+
+Entity definitions in `base44/entities/` are applied by the same deployment, so
+a new field (such as `Message.route`) arrives with the next publish.
+
+The VPS copy (`https://xecutr.cloud`) is separate: it pulls `main` every five
+minutes by itself and needs no publish step.
+
 There is no `index.html`: the HTML document is rendered on the server from `src/routes/__root.jsx`. The build runs through the [Cloudflare Vite plugin](https://developers.cloudflare.com/workers/vite-plugin/), so dev and build both execute server code in `workerd`.
 
 ## How the pieces fit

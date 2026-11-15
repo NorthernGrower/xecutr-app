@@ -5,6 +5,7 @@ import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
 import Panel from "@/components/workspace/Panel";
 import { authQuery } from "@/lib/AuthContext";
 import { adminTrialUsage } from "@/lib/admin";
+import { BUILD } from "@/lib/build";
 import { xecutrHealth } from "@/lib/chat";
 
 export const Route = createFileRoute("/_authed/admin")({
@@ -64,6 +65,10 @@ function AdminPage() {
               <p>
                 <span className="text-muted-foreground">Platform role:</span>{" "}
                 <span className="font-mono text-[12px] uppercase text-[#e0f7ff]">{user?.role}</span>
+              </p>
+              <p className="font-body text-[13px]">
+                <span className="text-muted-foreground">App build:</span>{" "}
+                <span className="font-mono text-[12px] uppercase text-[#e0f7ff]">{BUILD}</span>
               </p>
               <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
                 Roles are managed in the Base44 builder's Members area — whoever is marked
