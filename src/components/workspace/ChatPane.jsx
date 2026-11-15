@@ -302,9 +302,16 @@ export default function ChatPane({
     initialMessages,
     onFiles: writeFiles,
     onMedia: saveGenerated,
-    onTasks: recordTasks,
     onFinish: (result) => {
-      persist(result).catch(() => setNotice("Saved locally only — the project write failed."));
+      // The server wrote the turn itself (so a closed tab loses nothing); the
+      // browser only falls back when there was no project to write into.
+      if (result.persisted) {
+        savedRef.current?.();
+        return;
+      }
+      persist(result)
+        .then(() => (result.tasks?.length ? recordTasks(result.tasks) : undefined))
+        .catch(() => setNotice("Saved locally only — the project write failed."));
     },
   });
 
@@ -447,6 +454,7 @@ export default function ChatPane({
           <div className="flex items-center gap-2 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[#b0c4de]">
             <AnimatedX size={11} className="text-[#0e7490]" />
             <span>executing</span>
+            <span className="text-muted-foreground/70">· runs on the server</span>
             <button
               type="button"
               onClick={cancel}

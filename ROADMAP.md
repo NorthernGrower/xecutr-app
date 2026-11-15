@@ -142,6 +142,10 @@ visible to the person using the product.
 
 ## Phase 6 — Multi-agent
 
+- [x] **The server owns the result.** A finished turn is written by the server
+      that ran it — message, files, pinned tasks, memory note and project
+      counters — before it returns to the browser, so closing the tab cannot
+      lose work the model already completed.
 - [ ] **Planner / builder / reviewer split.** The planner writes the plan, the
       builder writes the files, the reviewer fails it with reasons.
 - [ ] **Parallel fan-out.** Independent files built in parallel by separate

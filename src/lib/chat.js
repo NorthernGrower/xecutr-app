@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth-middleware";
 import { providerById } from "@/lib/providers";
 import { buildTurn, readTurn } from "@/lib/gateway.server";
+import { saveTurn } from "@/lib/turn-save.server";
 import { fetchHealth, fetchProviders, forwardableKeys, postAbort, postChat, postUpload } from "@/lib/xecutr.server";
 
 const MAX_TURN_CHARS = 60000;
@@ -44,12 +45,20 @@ export const turnSchema = z.object({
 });
 
 /**
- * The project chat's answer path: one turn against this app's own model server,
- * returned whole as { text, files, providerName, modelLabel }.
+ * The project chat's answer path: one turn against this app's own model server.
+ *
+ * The turn is saved here, on the server, before it is returned: the message, the
+ * files it wrote, its pinned tasks, its memory note and the project counters.
+ * A closed tab therefore cannot lose work the model already finished, and the
+ * browser only falls back to writing when there was no project to write to.
  */
 export const ask = createServerFn({ method: "POST" })
   .validator(turnSchema)
-  .handler(async ({ data, context }) => readTurn(await postChat(await buildTurn(data, context))));
+  .handler(async ({ data, context }) => {
+    const turn = await readTurn(await postChat(await buildTurn(data, context)));
+    const persisted = await saveTurn({ data, context, turn });
+    return { ...turn, persisted };
+  });
 
 /** The server's provider catalogue with its live model lists, for the picker. */
 export const xecutrCatalog = createServerFn({ method: "POST" })

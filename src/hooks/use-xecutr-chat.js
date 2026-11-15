@@ -121,6 +121,8 @@ export default function useXecutrChat({ initialMessages = [], onFiles, onMedia, 
           provider: result?.providerName,
           model: result?.modelLabel,
           route: result?.routes || [],
+          tasks: taskRequests,
+          persisted: Boolean(result?.persisted),
         });
       }
     } catch (err) {
