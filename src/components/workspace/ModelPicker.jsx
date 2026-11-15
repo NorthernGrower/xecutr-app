@@ -46,15 +46,26 @@ export default function ModelPicker({ providers = [], value, onChange, onRefresh
       >
         <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
           <span className="label-mono">model route</span>
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={busy}
-            className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground transition hover:text-white disabled:opacity-40"
-          >
-            <RefreshCw className={busy ? "h-2.5 w-2.5 animate-spin" : "h-2.5 w-2.5"} />
-            refresh
-          </button>
+          <div className="flex items-center gap-3">
+            {active && (
+              <button
+                type="button"
+                onClick={() => choose({ providerId: "", model: "" })}
+                className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#0e7490] transition hover:underline"
+              >
+                use auto
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={busy}
+              className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground transition hover:text-white disabled:opacity-40"
+            >
+              <RefreshCw className={busy ? "h-2.5 w-2.5 animate-spin" : "h-2.5 w-2.5"} />
+              refresh
+            </button>
+          </div>
         </div>
 
         <div className="max-h-[360px] overflow-auto">
