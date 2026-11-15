@@ -18,7 +18,7 @@ const MAX_UPLOAD = 25 * 1024 * 1024;
 const MAX_INSPECT = 8 * 1024 * 1024;
 
 /** A generated asset is saved with an extension its own element can play. */
-const MEDIA_EXT = { image: "jpg", video: "mp4", music: "wav" };
+const MEDIA_EXT = { image: "jpg", video: "mp4", music: "mp3" };
 
 const readBase64 = (file) =>
   new Promise((resolve, reject) => {

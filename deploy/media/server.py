@@ -69,6 +69,7 @@ CONTENT_TYPES = {
     ".webp": "image/webp",
     ".gif": "image/gif",
     ".mp4": "video/mp4",
+    ".mp3": "audio/mpeg",
     ".wav": "audio/wav",
 }
 
@@ -258,6 +259,41 @@ def run_video(job):
 MUSIC_TOKENS_PER_SECOND = 50
 
 
+def to_mp3(wav_path):
+    """Ten seconds of WAV is 640 KB; MP3 is a tenth of that, fits in a project
+    file, and every browser plays it. The WAV is removed once it works."""
+    import subprocess
+
+    try:
+        import imageio_ffmpeg
+    except ImportError:
+        return None
+
+    out = wav_path.with_suffix(".mp3")
+    try:
+        subprocess.run(
+            [
+                imageio_ffmpeg.get_ffmpeg_exe(),
+                "-y",
+                "-loglevel",
+                "error",
+                "-i",
+                str(wav_path),
+                "-b:a",
+                "128k",
+                str(out),
+            ],
+            check=True,
+            timeout=120,
+        )
+    except Exception as err:  # noqa: BLE001 — a WAV is still a fine answer
+        log(f"mp3 transcode failed, keeping the wav: {type(err).__name__}: {err}")
+        return None
+
+    wav_path.unlink(missing_ok=True)
+    return out.name
+
+
 def run_music(job):
     import wave
 
@@ -299,12 +335,13 @@ def run_music(job):
     pcm = (audio * 32767.0).astype("<i2")
 
     name = f"{job['id']}.wav"
-    with wave.open(str(DATA / name), "wb") as out:
+    wav_path = DATA / name
+    with wave.open(str(wav_path), "wb") as out:
         out.setnchannels(1)
         out.setsampwidth(2)
         out.setframerate(int(pipe["rate"]))
         out.writeframes(pcm.tobytes())
-    job["file"] = name
+    job["file"] = to_mp3(wav_path) or name
 
 
 def worker():
