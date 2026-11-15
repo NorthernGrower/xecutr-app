@@ -13,7 +13,10 @@ export default function ModelPicker({ providers = [], value, onChange, onRefresh
   const [expanded, setExpanded] = useState(value.providerId || providers[0]?.id || "");
 
   const active = providers.find((p) => p.id === value.providerId);
-  const current = active ? `${active.label} · ${modelLabel(active, value.model)}` : "auto · fastest first";
+  // Auto names the provider that will actually answer first, so the page never
+  // reads "local first" while a hosted model is in front of it.
+  const autoLabel = providers[0] ? `auto · ${providers[0].label} first` : "auto · fastest first";
+  const current = active ? `pinned · ${active.label} · ${modelLabel(active, value.model)}` : autoLabel;
 
   const choose = (next) => {
     onChange(next);
@@ -65,7 +68,9 @@ export default function ModelPicker({ providers = [], value, onChange, onRefresh
                 auto · fastest first
               </span>
               <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-                hosted models answer first, walking down by speed; refusals go to this server
+                {providers[0]
+                  ? `${providers[0].label} answers first, then down by speed; refused or rate-limited turns fall to this server`
+                  : "waiting for a provider to answer its model list"}
               </span>
             </span>
             {!value.providerId && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#e0f7ff]" />}

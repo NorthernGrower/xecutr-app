@@ -402,8 +402,27 @@ const chooseModel = (provider, hasImages) => {
 /* --------------------------------------------------------------- catalog */
 
 /**
+ * When a provider answers "rate-limited" or "no credit" it has no tokens left
+ * for now. Remember that for a while and move it down the list: the harness
+ * walks to whichever provider still has room.
+ */
+const COOLDOWN_MS = 10 * 60 * 1000;
+const cooldowns = new Map();
+
+const coolingFor = (providerId) => {
+  const until = cooldowns.get(providerId) || 0;
+  return until > Date.now() ? Math.ceil((until - Date.now()) / 1000) : 0;
+};
+
+const noteStatus = (providerId, status) => {
+  if (status === 429 || status === 402) cooldowns.set(providerId, Date.now() + COOLDOWN_MS);
+};
+
+/**
  * Only providers that can answer now, each with the models it actually lists.
  * A provider with no key, or a keyless one that never answered, is not shown.
+ * The order is the routing order: fastest hosted first, a cooling provider
+ * further down, this server's models last.
  */
 async function catalog(clientKeys) {
   const entries = await Promise.all(
@@ -427,6 +446,7 @@ async function catalog(clientKeys) {
         keyless: Boolean(provider.keyless),
         keyed: Boolean(apiKey),
         local: Boolean(provider.local),
+        cooling: coolingFor(provider.id),
         note: provider.note || '',
         signupUrl: provider.signupUrl || '',
         environmentVariable: provider.environmentVariable || '',
@@ -438,8 +458,11 @@ async function catalog(clientKeys) {
   );
 
   const providers = entries.filter(Boolean).sort((a, b) => {
-    const score = (p) => scoreModel(p.models[0]?.id || '');
-    return score(b) - score(a) || a.name.localeCompare(b.name);
+    if (Boolean(a.local) !== Boolean(b.local)) return a.local ? 1 : -1;
+    if (Boolean(a.cooling) !== Boolean(b.cooling)) return a.cooling ? 1 : -1;
+    const speed = (SPEED[a.id] ?? 50) - (SPEED[b.id] ?? 50);
+    if (speed !== 0) return speed;
+    return scoreModel(b.models[0]?.id || '') - scoreModel(a.models[0]?.id || '');
   });
 
   return { providers, readyCount: providers.length };
@@ -496,7 +519,13 @@ function candidates({ providerId, model, clientKeys, catalogue, hasImages = fals
     .filter((p) => !p.local && !p.paid)
     .sort((a, b) => (SPEED[a.id] ?? 50) - (SPEED[b.id] ?? 50));
 
-  const routes = hosted
+  // Providers with no tokens left right now go last; one that still has room
+  // answers instead.
+  const ready = hosted.filter((p) => !p.cooling);
+  const cooling = hosted.filter((p) => p.cooling);
+  const ordered = [...ready, ...cooling];
+
+  const routes = ordered
     .slice(0, 3)
     .map((provider, index) =>
       route(provider, chooseModel(provider, hasImages), index === 0 ? 'fastest available' : 'next fastest'),
@@ -668,7 +697,10 @@ async function* streamText(route, { messages, system, signal }) {
         ...common,
       },
     );
-    if (!response.ok || !response.body) throw new Error(await failure(provider.name, response));
+    if (!response.ok || !response.body) {
+      noteStatus(provider.id, response.status);
+      throw new Error(await failure(provider.name, response));
+    }
 
     for await (const line of sseLines(response.body)) {
       const event = sseData(line);
@@ -703,7 +735,10 @@ async function* streamText(route, { messages, system, signal }) {
       body: JSON.stringify(body),
       ...common,
     });
-    if (!response.ok || !response.body) throw new Error(await failure(provider.name, response));
+    if (!response.ok || !response.body) {
+      noteStatus(provider.id, response.status);
+      throw new Error(await failure(provider.name, response));
+    }
 
     for await (const line of sseLines(response.body)) {
       const event = sseData(line);
@@ -735,7 +770,10 @@ async function* streamText(route, { messages, system, signal }) {
     body: JSON.stringify(payload),
     ...common,
   });
-  if (!response.ok || !response.body) throw new Error(await failure(provider.name, response));
+  if (!response.ok || !response.body) {
+    noteStatus(provider.id, response.status);
+    throw new Error(await failure(provider.name, response));
+  }
 
   for await (const line of sseLines(response.body)) {
     const event = sseData(line);

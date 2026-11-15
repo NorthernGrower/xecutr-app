@@ -27,9 +27,21 @@ export default function ProviderRow({ provider, expanded, selectedModel, onToggl
                 free
               </span>
             )}
+            {provider.local && (
+              <span className="rounded-sm border border-amber-500/30 px-1 py-px font-mono text-[8px] uppercase tracking-[0.12em] text-amber-700">
+                last resort
+              </span>
+            )}
+            {provider.cooling > 0 && (
+              <span className="rounded-sm border border-red-500/30 px-1 py-px font-mono text-[8px] uppercase tracking-[0.12em] text-red-600">
+                cooling {Math.max(1, Math.ceil(provider.cooling / 60))}m
+              </span>
+            )}
           </span>
           <span className="mt-0.5 block truncate font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-            {ready ? `${provider.models.length} models · ${provider.defaultModelLabel || provider.defaultModel || "auto"}` : `needs key · ${provider.environmentVariable || provider.id}`}
+            {ready
+              ? `${provider.models.length} models · ${provider.defaultModelLabel || provider.defaultModel || "auto"}`
+              : `needs key · ${provider.environmentVariable || provider.id}`}
           </span>
         </span>
         <span className={cn("shrink-0 text-muted-foreground transition", expanded && "rotate-180")}>

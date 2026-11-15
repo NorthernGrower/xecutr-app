@@ -32,6 +32,8 @@ const normalizeLive = (provider) => {
     status: provider.status || "unknown",
     free: provider.freeTier ?? local?.free ?? false,
     keyless: Boolean(provider.keyless),
+    local: Boolean(provider.local),
+    cooling: Number(provider.cooling) || 0,
     defaultModel: provider.defaultModel || "",
     defaultModelLabel: provider.defaultModelLabel || "",
     models: asModels(provider),
@@ -42,17 +44,11 @@ const normalizeLive = (provider) => {
   };
 };
 
-/** Ready providers with at least one model the gateway actually listed. */
+/** The gateway's order is the routing order: fastest hosted first, local last. */
 export function mergeCatalog(catalog) {
   return (catalog?.providers || [])
     .map(normalizeLive)
-    .filter((provider) => provider.models.length > 0)
-    .sort(
-      (a, b) =>
-        Number(b.free) - Number(a.free) ||
-        Number(b.keyless) - Number(a.keyless) ||
-        a.label.localeCompare(b.label),
-    );
+    .filter((provider) => provider.models.length > 0);
 }
 
 export const modelLabel = (provider, id) =>
