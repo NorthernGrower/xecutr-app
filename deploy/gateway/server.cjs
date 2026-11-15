@@ -170,7 +170,11 @@ const chatTurn = async (req, res) => {
     }
   }
 
-  const turns = (body.messages || []).map((m) => ({ role: m.role || 'user', content: m.text || '' }));
+  // `text` is what the app sends; `content` is what an OpenAI-style caller sends.
+  const turns = (body.messages || []).map((m) => ({
+    role: m.role || 'user',
+    content: m.text || m.content || '',
+  }));
   const lastUser = [...turns].reverse().find((m) => m.role === 'user');
   if (lastUser) lastUser.content = withMediaReminder(lastUser.content);
 
