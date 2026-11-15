@@ -22,6 +22,8 @@
  *   PORT             public port                    (default 8080)
  *   OLLAMA_BASE_URL  OpenAI-compatible base         (default http://127.0.0.1:11434/v1)
  *   OLLAMA_MODEL     model used when none requested (default coder)
+ *   OLLAMA_ROUTE_MODEL    picked instead for long or heavy turns (default: none)
+ *   OLLAMA_FALLBACK_MODEL retried when a turn is refused or errors (default: none)
  *   FRONTEND_ORIGIN  where the app build runs       (default http://127.0.0.1:8082)
  *   BASE44_BACKEND   where Base44's platform lives  (default https://base44.app)
  *   MEDIA_URL        where the media service listens (default http://127.0.0.1:8090)
@@ -35,6 +37,10 @@ const path = require('node:path');
 const PORT = Number(process.env.PORT || '8080');
 const OLLAMA = (process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434/v1').replace(/\/+$/, '');
 const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'coder';
+/** A long or heavy turn goes here instead of the fast default (empty: never route). */
+const ROUTE_MODEL = process.env.OLLAMA_ROUTE_MODEL || '';
+/** The unrestricted local model a refusal or a failed turn escalates to. */
+const FALLBACK_MODEL = process.env.OLLAMA_FALLBACK_MODEL || '';
 const FRONT = new URL(process.env.FRONTEND_ORIGIN || 'http://127.0.0.1:8082');
 const BACKEND = new URL(process.env.BASE44_BACKEND || 'https://base44.app');
 const UPLOAD_DIR = '/tmp/xecutr-uploads';
@@ -132,6 +138,128 @@ const withMediaReminder = (text) => {
   return `${text}${MEDIA_REMINDER}`;
 };
 
+/** Words that mean the turn is worth a stronger model than the fast default. */
+const HEAVY_TASK =
+  /(architect|design|refactor|review|audit|security|optimi[sz]e|migrat|multi-?\s?file|whole project|end to end|debug|explain (why|how))/i;
+
+/** How much of a reply is held back before it is trusted not to be a refusal. */
+const HEDGE_CHARS = 320;
+
+/** A short, apologetic reply is a refusal — the cue to escalate. */
+const REFUSAL =
+  /(I (?:can't|cannot|won't|am unable)|I'm (?:sorry|unable|not able)|as an AI|I must decline|cannot assist|can't help with)/i;
+
+const looksLikeRefusal = (text) => {
+  const trimmed = text.trim();
+  return trimmed.length > 0 && trimmed.length < 600 && REFUSAL.test(trimmed);
+};
+
+/**
+ * Best model first: a pinned choice wins, otherwise a long or heavy prompt goes
+ * to the routed model and everything else to the fast default.
+ */
+const pickModel = (body, requested) => {
+  if (requested) return requested;
+  const text = (body.messages || []).map((m) => m.text || m.content || '').join('\n');
+  const files = Array.isArray(body.files) ? body.files : [];
+  const heavy = text.length > 1200 || files.length > 12 || (text.length > 400 && HEAVY_TASK.test(text));
+  return heavy && ROUTE_MODEL ? ROUTE_MODEL : DEFAULT_MODEL;
+};
+
+/**
+ * One upstream turn, streamed to the reader — but the first HEDGE_CHARS are held
+ * back, so a refusal can be re-run on the unrestricted model before anything is
+ * shown, and the reader never has to unsee it. Past the hedge, deltas go out as
+ * they arrive.
+ */
+const upstreamTurn = async ({ model, messages, res, hedge }) => {
+  let upstream;
+  try {
+    upstream = await fetch(`${OLLAMA}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages, stream: true }),
+    });
+  } catch (err) {
+    return { ok: false, status: 0, text: '', emitted: 0, refusal: false, error: err?.message || String(err) };
+  }
+  if (!upstream.ok || !upstream.body) {
+    return { ok: false, status: upstream.status, text: '', emitted: 0, refusal: false };
+  }
+
+  let full = '';
+  let pending = '';
+  let emitted = 0;
+  let decided = !hedge;
+
+  const write = (text) => {
+    if (!text) return;
+    sse(res, { type: 'text', text });
+    emitted += text.length;
+  };
+
+  const emit = (delta) => {
+    full += delta;
+    if (decided) {
+      write(delta);
+      return;
+    }
+    pending += delta;
+    if (pending.length < HEDGE_CHARS) return;
+    if (looksLikeRefusal(full)) return; // keep holding: the caller may escalate
+    decided = true;
+    write(pending);
+    pending = '';
+  };
+
+  let buffer = '';
+  const decoder = new TextDecoder();
+  const take = (chunk) => {
+    buffer += chunk;
+    let cut;
+    while ((cut = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, cut).trim();
+      buffer = buffer.slice(cut + 1);
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice(5).trim();
+      if (payload === '[DONE]') continue;
+      try {
+        const delta = JSON.parse(payload)?.choices?.[0]?.delta?.content;
+        if (delta) emit(delta);
+      } catch {
+        /* partial JSON across a chunk boundary — the next chunk completes it */
+      }
+    }
+  };
+
+  try {
+    const reader = upstream.body.getReader();
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      take(decoder.decode(value, { stream: true }));
+    }
+    take(decoder.decode());
+    if (buffer.trim().startsWith('data:')) {
+      try {
+        const delta = JSON.parse(buffer.trim().slice(5).trim())?.choices?.[0]?.delta?.content;
+        if (delta) emit(delta);
+      } catch {
+        /* a truncated final line is not a delta */
+      }
+    }
+  } catch (err) {
+    return { ok: true, text: full, emitted, refusal: false, error: err?.message || String(err) };
+  }
+
+  if (!decided) {
+    const refusal = looksLikeRefusal(full);
+    if (!refusal) write(pending);
+    return { ok: true, text: full, emitted, refusal };
+  }
+  return { ok: true, text: full, emitted, refusal: false };
+};
+
 /** Everything the gateway needs to say before the model's first token. */
 const chatTurn = async (req, res) => {
   res.writeHead(200, {
@@ -147,9 +275,6 @@ const chatTurn = async (req, res) => {
     res.end('data: [DONE]\n\n');
     return;
   }
-
-  const model = body.model || DEFAULT_MODEL;
-  sse(res, { type: 'route', providerName: 'Ollama (this server)', modelLabel: model });
 
   // Referenced uploads that are small and textual ride along; binary ones don't.
   const uploadNotes = [];
@@ -183,75 +308,36 @@ const chatTurn = async (req, res) => {
     ...turns,
   ].filter((m) => m.content);
 
-  try {
-    const upstream = await fetch(`${OLLAMA}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages, stream: true }),
+  const primary = pickModel(body, body.model || '');
+  sse(res, { type: 'route', providerName: 'Ollama (this server)', modelLabel: primary });
+
+  let answer = await upstreamTurn({ model: primary, messages, res, hedge: true });
+
+  // A refusal or a failed turn is not an answer: give it to the local
+  // unrestricted model, and its file blocks land in the project like any other.
+  if ((!answer.ok || answer.refusal) && FALLBACK_MODEL && FALLBACK_MODEL !== primary) {
+    sse(res, {
+      type: 'route',
+      providerName: 'Local fallback',
+      modelLabel: FALLBACK_MODEL,
+      escalated: true,
+      reason: answer.ok ? 'refusal' : 'error',
     });
-    if (!upstream.ok || !upstream.body) {
-      sse(res, {
-        type: 'error',
-        message: `Ollama answered ${upstream.status}. Is the model pulled? (ollama list)`,
-      });
-      res.end('data: [DONE]\n\n');
-      return;
-    }
+    answer = await upstreamTurn({ model: FALLBACK_MODEL, messages, res, hedge: false });
+  }
 
-    // Ollama streams OpenAI-style SSE; re-frame its deltas as our text events.
-    let full = '';
-    let buffer = '';
-    const decoder = new TextDecoder();
-    // One reader for the whole stream: a second getReader() on a live stream
-    // throws "ReadableStream is locked" and would fail the turn after chunk one.
-    const reader = upstream.body.getReader();
-
-    const emit = (record) => {
-      const delta = record?.choices?.[0]?.delta?.content;
-      if (!delta) return;
-      full += delta;
-      sse(res, { type: 'text', text: delta });
-    };
-
-    const take = (chunk) => {
-      buffer += chunk;
-      let cut;
-      while ((cut = buffer.indexOf('\n')) !== -1) {
-        const line = buffer.slice(0, cut).trim();
-        buffer = buffer.slice(cut + 1);
-        if (!line.startsWith('data:')) continue;
-        const payload = line.slice(5).trim();
-        if (payload === '[DONE]') continue;
-        try {
-          emit(JSON.parse(payload));
-        } catch {
-          /* partial JSON across a chunk boundary — the next chunk completes it */
-        }
-      }
-    };
-
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      take(decoder.decode(value, { stream: true }));
-    }
-    take(decoder.decode());
-    if (buffer.trim().startsWith('data:')) {
-      try {
-        emit(JSON.parse(buffer.trim().slice(5).trim()));
-      } catch {
-        /* a truncated final line is not a delta */
-      }
-    }
-
+  if (!answer.ok) {
+    sse(res, {
+      type: 'error',
+      message: `Ollama answered ${answer.status || 0}. Is the model pulled? (ollama list)`,
+    });
+  } else {
     // Tell the app about file blocks inline, so its tool path saves them too.
-    const files = [...full.matchAll(/```file path=["']([^"']+)["']\n([\s\S]*?)```/g)].map((m) => ({
+    const files = [...answer.text.matchAll(/```file path=["']([^"']+)["']\n([\s\S]*?)```/g)].map((m) => ({
       path: m[1],
       content: m[2].replace(/\n$/, ''),
     }));
     if (files.length) sse(res, { type: 'files', files });
-  } catch (err) {
-    sse(res, { type: 'error', message: `Ollama is unreachable: ${err?.message || err}` });
   }
 
   res.end('data: [DONE]\n\n');

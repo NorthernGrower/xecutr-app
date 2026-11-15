@@ -51,7 +51,7 @@ MUSIC_MODEL = os.environ.get("MEDIA_MUSIC_MODEL", "facebook/musicgen-small")
 LIMITS = {
     "image": {"size": (256, 768), "steps": (1, 8)},
     "video": {"size": (256, 640), "steps": (1, 8), "frames": (8, 32)},
-    "music": {"duration": (5, 30)},
+    "music": {"duration": (5, 480)},
 }
 
 JOBS = {}
@@ -294,6 +294,26 @@ def to_mp3(wav_path):
     return out.name
 
 
+# The decoder's position embeddings stop at 2048 tokens (~40 s of audio), so a
+# long track is rendered window by window and crossfaded together. 30 s leaves
+# room for the codebook delay pattern and still sounds continuous.
+MUSIC_SEGMENT_SECONDS = 30
+
+
+def crossfade(chunks, fade, np):
+    """Join PCM windows, blending the tail of one into the head of the next."""
+    out = chunks[0]
+    for nxt in chunks[1:]:
+        if fade <= 0 or len(nxt) <= fade or len(out) <= fade:
+            out = np.concatenate([out, nxt])
+            continue
+        ramp = np.linspace(0.0, 1.0, fade, dtype=np.float32)
+        head = nxt[:fade] * ramp
+        tail = out[-fade:] * (1.0 - ramp)
+        out = np.concatenate([out[:-fade], tail + head, nxt[fade:]])
+    return out
+
+
 def run_music(job):
     import wave
 
@@ -302,35 +322,57 @@ def run_music(job):
     from transformers import StoppingCriteria
 
     pipe = pipe_for("music")
-    seconds = int(job["params"].get("seconds") or 10)
+    target = int(job["params"].get("seconds") or 10)
     seed = int(job["params"].get("seed") if job["params"].get("seed") is not None else random.randrange(1, 2**31))
     job["seed"] = seed
     torch.manual_seed(seed)
 
-    tokens = max(1, seconds * MUSIC_TOKENS_PER_SECOND)
+    rate = int(pipe["rate"])
+    window = min(MUSIC_SEGMENT_SECONDS, target)
+    windows = max(1, -(-target // window))  # ceil, so the tail is never clipped
+    chunks = []
+    done = 0
 
-    class Progress(StoppingCriteria):
-        """Report how far generation has got — never stops the music early."""
+    def progress_for(base, span, tokens):
+        """Report tokens as they arrive; never stop the music early."""
 
-        def __call__(self, input_ids, scores, **kwargs):  # noqa: ARG002 — the signature is HF's
-            job["progress"] = round(0.2 + 0.7 * min(1.0, input_ids.shape[-1] / tokens), 3)
-            return False
+        class Progress(StoppingCriteria):
+            def __call__(self, input_ids, scores, **kwargs):  # noqa: ARG002 — HF's signature
+                job["progress"] = round(base + span * min(1.0, input_ids.shape[-1] / tokens), 3)
+                return False
 
-    inputs = pipe["processor"](
-        text=[job["prompt"]],
-        truncation=True,
-        padding=True,
-        return_tensors="pt",
-    )
-    result = pipe["model"].generate(
-        **inputs,
-        do_sample=True,
-        max_new_tokens=tokens,
-        stopping_criteria=[Progress()],
-    )
+        return Progress()
 
-    job["progress"] = 0.95
-    audio = np.clip(result[0, 0].float().cpu().numpy(), -1.0, 1.0)
+    log(f"music: {target}s in {windows} window(s) of up to {window}s")
+    for index in range(windows):
+        take = min(window, target - done)
+        tokens = max(1, take * MUSIC_TOKENS_PER_SECOND)
+        base = 0.12 + 0.78 * done / target
+        span = 0.78 * take / target
+
+        inputs = pipe["processor"](
+            text=[job["prompt"]],
+            truncation=True,
+            padding=True,
+            return_tensors="pt",
+        )
+        result = pipe["model"].generate(
+            **inputs,
+            do_sample=True,
+            max_new_tokens=tokens,
+            stopping_criteria=[progress_for(base, span, tokens)],
+        )
+
+        chunk = result[0, 0].float().cpu().numpy()
+        wanted = take * rate
+        if chunk.shape[-1] < wanted:
+            chunk = np.pad(chunk, (0, wanted - chunk.shape[-1]))
+        chunks.append(chunk[:wanted])
+        done += take
+        log(f"music: window {index + 1}/{windows} done ({done}s of {target}s)")
+
+    job["progress"] = 0.93
+    audio = np.clip(crossfade(chunks, rate // 12, np), -1.0, 1.0)  # ~0.08 s blend
     # 16-bit PCM: WAV written from float32 is unplayable in some browsers.
     pcm = (audio * 32767.0).astype("<i2")
 
@@ -339,7 +381,7 @@ def run_music(job):
     with wave.open(str(wav_path), "wb") as out:
         out.setnchannels(1)
         out.setsampwidth(2)
-        out.setframerate(int(pipe["rate"]))
+        out.setframerate(rate)
         out.writeframes(pcm.tobytes())
     job["file"] = to_mp3(wav_path) or name
 

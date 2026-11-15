@@ -115,6 +115,8 @@ if printf '%s\n' "${changed}" | grep -q '^deploy/gateway/'; then
         -e FRONTEND_ORIGIN="http://127.0.0.1:8082" \
         -e OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://127.0.0.1:11434/v1}" \
         -e OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5-coder:7b}" \
+        -e OLLAMA_ROUTE_MODEL="${OLLAMA_ROUTE_MODEL:-huihui_ai/qwen3.5-abliterated:9b-OmniCoder}" \
+        -e OLLAMA_FALLBACK_MODEL="${OLLAMA_FALLBACK_MODEL:-huihui_ai/qwen3.5-abliterated:9b-OmniCoder}" \
         -e MEDIA_URL="${MEDIA_URL:-http://127.0.0.1:8090}" \
         xecutr >/dev/null
     log "Gateway container rebuilt and restarted."

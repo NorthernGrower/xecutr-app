@@ -54,3 +54,35 @@ export const spendTrialTurn = async (context) => {
 };
 
 export const TRIAL_LIMIT = LIMIT;
+
+/** Signed-out generations a day: media costs far more CPU than a chat turn. */
+const MEDIA_LIMIT = 3;
+
+/**
+ * Counts one signed-out media generation against the caller's daily allowance.
+ * Media rows are told apart from chat rows by a `#media` suffix on the day, so
+ * the two allowances never eat into each other (and the schema stays as it is).
+ */
+export const spendTrialMedia = async (context) => {
+  let admin;
+  try {
+    admin = context.getBase44().asServiceRole;
+  } catch {
+    return true;
+  }
+  const day = `${dayKey()}#media`;
+  const ip_hash = await digest(`${clientAddress() || "unknown"}:${day}`);
+
+  const rows = await admin.entities.TrialQuota.filter({ day, ip_hash }, "-created_date", 1);
+  const row = rows?.[0];
+
+  if (!row) {
+    await admin.entities.TrialQuota.create({ day, ip_hash, count: 1 });
+    return true;
+  }
+  if ((row.count || 0) >= MEDIA_LIMIT) return false;
+  await admin.entities.TrialQuota.update(row.id, { count: (row.count || 0) + 1 });
+  return true;
+};
+
+export const TRIAL_MEDIA_LIMIT = MEDIA_LIMIT;

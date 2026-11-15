@@ -223,6 +223,8 @@ docker run -d --name xecutr --restart unless-stopped --network host \
   -e FRONTEND_ORIGIN="http://127.0.0.1:$FRONT_PORT" \
   -e OLLAMA_BASE_URL=http://127.0.0.1:11434/v1 \
   -e OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5-coder:7b}" \
+  -e OLLAMA_ROUTE_MODEL="${OLLAMA_ROUTE_MODEL:-huihui_ai/qwen3.5-abliterated:9b-OmniCoder}" \
+  -e OLLAMA_FALLBACK_MODEL="${OLLAMA_FALLBACK_MODEL:-huihui_ai/qwen3.5-abliterated:9b-OmniCoder}" \
   -e MEDIA_URL="http://127.0.0.1:8090" \
   ${FORGE_OS_CORS_ORIGIN:+-e FORGE_OS_CORS_ORIGIN="$FORGE_OS_CORS_ORIGIN"} \
   ${FORGE_OS_API_TOKEN:+-e FORGE_OS_API_TOKEN="$FORGE_OS_API_TOKEN"} \

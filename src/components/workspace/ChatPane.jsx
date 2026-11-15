@@ -159,7 +159,13 @@ export default function ChatPane({
           prompt: done.prompt,
         },
       ]);
-      await writeFiles([{ path, content }]);
+      // Only an inline copy can live in a project file; a long track stays on
+      // the server and the message plays it from its address.
+      if (done.dataUrl) {
+        await writeFiles([{ path, content }]);
+      } else {
+        setNotice(`That track is on the server at ${done.url} — too long to store as a project file.`);
+      }
     },
     [runMedia, writeFiles],
   );
@@ -167,10 +173,12 @@ export default function ChatPane({
   /** What the media panel makes lands in the project too. */
   const saveFromPanel = useCallback(
     async (done) => {
-      const content = done?.dataUrl || done?.url;
-      if (!content) return;
+      if (!done?.dataUrl) {
+        if (done?.url) setNotice(`That track is on the server at ${done.url} — too long to store as a project file.`);
+        return;
+      }
       const ext = MEDIA_EXT[done.kind] || "bin";
-      await writeFiles([{ path: `assets/generated/${done.kind}-${done.id}.${ext}`, content }]);
+      await writeFiles([{ path: `assets/generated/${done.kind}-${done.id}.${ext}`, content: done.dataUrl }]);
       savedRef.current?.();
     },
     [writeFiles],
@@ -437,7 +445,7 @@ export default function ChatPane({
                   onChange={(e) => upload(e.target.files?.[0])}
                 />
               </label>
-              {!trial && projectId && (
+              {(trial || projectId) && (
                 <button
                   type="button"
                   onClick={() => setMediaOpen(true)}
@@ -460,8 +468,13 @@ export default function ChatPane({
         />
       </div>
 
-      {!trial && projectId && (
-        <MediaDialog open={mediaOpen} onOpenChange={setMediaOpen} onGenerated={saveFromPanel} />
+      {(trial || projectId) && (
+        <MediaDialog
+          open={mediaOpen}
+          onOpenChange={setMediaOpen}
+          onGenerated={saveFromPanel}
+          anonymous={trial}
+        />
       )}
     </div>
   );

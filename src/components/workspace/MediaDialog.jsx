@@ -13,10 +13,19 @@ import { mediaHealth } from "@/lib/media";
 const KINDS = [
   { id: "image", label: "image", icon: ImageIcon, hint: "seconds per image on this CPU" },
   { id: "video", label: "clip", icon: Clapperboard, hint: "minutes per clip on this CPU" },
-  { id: "music", label: "music", icon: Music2, hint: "about a minute per track on this CPU" },
+  { id: "music", label: "music", icon: Music2, hint: "about 2 min of CPU per 30 s of audio" },
 ];
 
 const SIZES = [384, 512, 640];
+const TRIAL_SIZES = [384, 512];
+
+/** MusicGen renders a window at a time; a long track is the sum of its windows. */
+const SECONDS = [5, 10, 20, 30, 60, 120, 240, 480];
+const TRIAL_SECONDS = [5, 10, 20, 30];
+const SECONDS_PER_WINDOW = 30;
+const MINUTES_PER_WINDOW = 1.8;
+
+const lengthLabel = (value) => (value >= 60 ? `${Math.round(value / 60)}m` : `${value}s`);
 
 const Field = ({ label, children }) => (
   <label className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
@@ -29,11 +38,16 @@ const selectClass =
   "rounded-sm border border-white/10 bg-[#0b0b0b] px-1.5 py-1 font-mono text-[10px] text-[#dfe6ee] outline-none focus:border-[#b0c4de]/50";
 
 /**
- * Generate one image or clip with the models this deployment runs itself
+ * Generate one image, clip or track with the models this deployment runs itself
  * (deploy/media). A clip is minutes of CPU, so the job is followed by polling
  * and the dialog stays open with its progress until the file lands.
+ * A signed-out visitor gets the trial shape: no clips, short tracks, small images.
  */
-export default function MediaDialog({ open, onOpenChange, onGenerated }) {
+export default function MediaDialog({ open, onOpenChange, onGenerated, anonymous = false }) {
+  const kinds = anonymous ? KINDS.filter((k) => k.id !== "video") : KINDS;
+  const sizeOptions = anonymous ? TRIAL_SIZES : SIZES;
+  const secondOptions = anonymous ? TRIAL_SECONDS : SECONDS;
+
   const [kind, setKind] = useState("image");
   const [prompt, setPrompt] = useState("");
   const [size, setSize] = useState(512);
@@ -85,14 +99,14 @@ export default function MediaDialog({ open, onOpenChange, onGenerated }) {
           </DialogTitle>
           <DialogDescription className="font-body text-[12px] leading-relaxed text-muted-foreground">
             Runs the open Hugging Face models installed on this server. One job at a time — images
-            take seconds, a short track about a minute, clips take minutes, and a running job holds
-            the model in RAM.
+            take seconds, a short track about two minutes, clips take minutes, and a running job
+            holds the model in RAM.{anonymous ? " The free trial has no clips, 30 s tracks and 512px images." : ""}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={submit} className="space-y-3">
           <div className="inline-flex overflow-hidden rounded-sm border border-white/10">
-            {KINDS.map(({ id, label, icon: Icon, hint }) => {
+            {kinds.map(({ id, label, icon: Icon, hint }) => {
               const active = kind === id;
               return (
                 <button
@@ -129,9 +143,9 @@ export default function MediaDialog({ open, onOpenChange, onGenerated }) {
                   onChange={(e) => setSeconds(Number(e.target.value))}
                   className={selectClass}
                 >
-                  {[5, 10, 15, 20, 30].map((value) => (
+                  {secondOptions.map((value) => (
                     <option key={value} value={value}>
-                      {value}s
+                      {lengthLabel(value)}
                     </option>
                   ))}
                 </select>
@@ -140,7 +154,7 @@ export default function MediaDialog({ open, onOpenChange, onGenerated }) {
               <>
                 <Field label="size">
                   <select value={size} onChange={(e) => setSize(Number(e.target.value))} className={selectClass}>
-                    {SIZES.map((value) => (
+                    {sizeOptions.map((value) => (
                       <option key={value} value={value}>
                         {value}px
                       </option>
@@ -170,6 +184,12 @@ export default function MediaDialog({ open, onOpenChange, onGenerated }) {
                   ))}
                 </select>
               </Field>
+            )}
+
+            {kind === "music" && (
+              <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground/70">
+                ≈ {Math.max(1, Math.round((seconds / SECONDS_PER_WINDOW) * MINUTES_PER_WINDOW))} min on this CPU
+              </span>
             )}
           </div>
 
