@@ -13,7 +13,7 @@ import { mediaHealth } from "@/lib/media";
 const KINDS = [
   { id: "image", label: "image", icon: ImageIcon, hint: "seconds per image on this CPU" },
   { id: "video", label: "clip", icon: Clapperboard, hint: "minutes per clip on this CPU" },
-  { id: "music", label: "music", icon: Music2, hint: "about 2 min of CPU per 30 s of audio" },
+  { id: "music", label: "music", icon: Music2, hint: "about 2-3 min of CPU per 30 s of audio" },
 ];
 
 const SIZES = [384, 512, 640];
@@ -23,7 +23,7 @@ const TRIAL_SIZES = [384, 512];
 const SECONDS = [5, 10, 20, 30, 60, 120, 240, 480];
 const TRIAL_SECONDS = [5, 10, 20, 30];
 const SECONDS_PER_WINDOW = 30;
-const MINUTES_PER_WINDOW = 1.8;
+const MINUTES_PER_WINDOW = 3;
 
 const lengthLabel = (value) => (value >= 60 ? `${Math.round(value / 60)}m` : `${value}s`);
 

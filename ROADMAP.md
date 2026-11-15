@@ -169,7 +169,9 @@ visible to the person using the product.
 ## Decisions made with the owner
 
 - Music: 5 s to **8 minutes**, rendered in 30 s windows and crossfaded; MP3 out.
-  A full 8-minute track is roughly 25-30 minutes of CPU on this box.
+  Measured on this CPU: 10 s ≈ 73 s, 35 s ≈ 3.5 min, 60 s ≈ 6.3 min, so a full
+  8-minute track is roughly 45-50 minutes of CPU. Faster needs a GPU, a
+  quantized MusicGen, or a hosted model.
 - Media works **in projects and standalone** (trial: image and music, no clips).
 - The harness **picks the best model first**, then falls back to the local
   abliterated model when a turn is refused or fails; its files join the project.
