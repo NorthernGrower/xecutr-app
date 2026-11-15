@@ -133,6 +133,13 @@ const systemPrompt = (body, uploadNotes) => {
       '"A calm bed for the page.\n[[music: soft piano and warm strings, 70 bpm, hopeful, cinematic]]"',
   );
   if (uploadNotes.length) parts.push(uploadNotes.join('\n'));
+  if (body.images?.length) {
+    parts.push(
+      `${body.images.length} image${body.images.length > 1 ? 's are' : ' is'} attached to the last message. ` +
+        'Look at them and answer about what is actually in the picture; never claim to have seen ' +
+        'an image you were not given.',
+    );
+  }
   return parts.filter(Boolean).join('\n\n');
 };
 
@@ -273,7 +280,14 @@ const chatTurn = async (req, res) => {
   }));
   const lastUser = [...turns].reverse().find((m) => m.role === 'user');
   if (lastUser) lastUser.text = withMediaReminder(lastUser.text);
-  const conversation = turns.filter((m) => m.text);
+
+  // Pasted images ride with the last user turn as data URLs.
+  const images = (Array.isArray(body.images) ? body.images : [])
+    .filter((value) => typeof value === 'string' && value.startsWith('data:image/'))
+    .slice(0, 3);
+  if (images.length && lastUser) lastUser.images = images;
+
+  const conversation = turns.filter((m) => m.text || m.images?.length);
   const system = systemPrompt(body, uploadNotes);
 
   // One controller for the whole turn: the browser may pause it, and a closed
@@ -292,6 +306,7 @@ const chatTurn = async (req, res) => {
     model: body.model,
     clientKeys: body.keys || {},
     catalogue,
+    hasImages: images.length > 0,
   });
 
   if (!routes.length) {

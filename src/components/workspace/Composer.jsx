@@ -27,6 +27,7 @@ export default function Composer({
   value,
   onChange,
   onSubmit,
+  onPaste,
   onPause,
   busy = false,
   placeholder = "Describe the project you want to build…",
@@ -119,6 +120,7 @@ export default function Composer({
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onPaste={onPaste}
         onKeyDown={(e) => {
           if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSend) onSubmit();
         }}

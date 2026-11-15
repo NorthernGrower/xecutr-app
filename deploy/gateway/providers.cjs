@@ -364,6 +364,23 @@ const scoreModel = (id) => {
 const bestModel = (models) =>
   [...models].sort((a, b) => scoreModel(b.id) - scoreModel(a.id))[0] || null;
 
+/**
+ * Models that can actually look at a picture. When someone pastes an image the
+ * harness prefers one of these, because a text-only model would answer about a
+ * picture it never received.
+ */
+const VISION_MODEL = /(vl|vision|llava|omni|qwen3\.5|qwen2\.5-vl|gemma3)/i;
+
+const visionModel = (models) => models.find((model) => VISION_MODEL.test(model.id)) || null;
+
+const chooseModel = (provider, hasImages) => {
+  if (hasImages) {
+    const vision = visionModel(provider.models);
+    if (vision) return vision;
+  }
+  return bestModel(provider.models);
+};
+
 /* --------------------------------------------------------------- catalog */
 
 /**
@@ -425,7 +442,7 @@ async function catalog(clientKeys) {
  * refusal from a hosted provider still produces working files in the project.
  * `reason` is what the reply's routing strip shows, so it has to be true.
  */
-function candidates({ providerId, model, clientKeys, catalogue }) {
+function candidates({ providerId, model, clientKeys, catalogue, hasImages = false }) {
   const listed_ = catalogue?.providers || [];
   const pinned = typeof providerId === 'string' ? providerId.trim() : '';
 
@@ -442,9 +459,17 @@ function candidates({ providerId, model, clientKeys, catalogue }) {
   if (pinned) {
     const provider = listed_.find((p) => p.id === pinned);
     if (provider) {
-      const chosen =
-        (typeof model === 'string' && provider.models.find((m) => m.id === model)) || bestModel(provider.models);
-      return [route(provider, chosen, 'pinned by you'), ...localFallback(chosen.id)];
+      const requested = typeof model === 'string' ? provider.models.find((m) => m.id === model) : null;
+      const chosen = requested || chooseModel(provider, hasImages);
+      // A text-only pin cannot see a pasted image; swap to a vision model the
+      // same provider offers and say why in the strip.
+      const blind = hasImages && !VISION_MODEL.test(chosen.id);
+      const vision = blind ? visionModel(provider.models) : null;
+      const picked = vision || chosen;
+      return [
+        route(provider, picked, blind && vision ? 'vision for the image' : 'pinned by you'),
+        ...localFallback(picked.id, hasImages),
+      ];
     }
   }
 
@@ -457,33 +482,36 @@ function candidates({ providerId, model, clientKeys, catalogue }) {
   if (keyed.length) {
     keyed.slice(0, 2).forEach((provider, index) => {
       routes.push(
-        route(provider, bestModel(provider.models), index === 0 ? 'best available' : 'next best available'),
+        route(provider, chooseModel(provider, hasImages), index === 0 ? 'best available' : 'next best available'),
       );
     });
   } else if (local) {
     // The fast local model answers first when nothing hosted is connected;
     // the abliterated one is still the fallback below.
     const preferred = process.env.OLLAMA_MODEL || '';
-    const chosen = local.models.find((m) => m.id === preferred) || bestModel(local.models);
+    const chosen =
+      (!hasImages && local.models.find((m) => m.id === preferred)) || chooseModel(local, hasImages);
     routes.push(route(local, chosen, 'best model on this server'));
   }
 
-  if (local && routes.length) routes.push(...localFallback(routes[0].model));
+  if (local && routes.length) routes.push(...localFallback(routes[0].model, hasImages));
   else if (!routes.length && keyless.length) {
-    routes.push(route(keyless[0], bestModel(keyless[0].models), 'keyless gateway'));
+    routes.push(route(keyless[0], chooseModel(keyless[0], hasImages), 'keyless gateway'));
   }
 
   return routes;
 }
 
 /** The local abliterated model: whatever this host actually has pulled. */
-function localFallback(afterModel) {
+function localFallback(afterModel, hasImages = false) {
   const local = catalogs.get('ollama');
   const models = local?.models || [];
   if (!models.length) return [];
 
   const fallbackId = process.env.OLLAMA_FALLBACK_MODEL || '';
-  const chosen = models.find((m) => m.id === fallbackId) || bestModel(models);
+  const chosen =
+    (!hasImages && models.find((m) => m.id === fallbackId)) ||
+    chooseModel({ models }, hasImages);
   if (!chosen || chosen.id === afterModel) return [];
 
   return [
@@ -555,6 +583,49 @@ const failure = async (name, response) => {
   return `${name} returned HTTP ${status}${detail ? ` — ${detail}` : ""}.`;
 };
 
+const imagesOf = (message) =>
+  (Array.isArray(message?.images) ? message.images : []).filter(
+    (value) => typeof value === 'string' && value.startsWith('data:image/'),
+  );
+
+const splitDataUrl = (url) => {
+  const match = /^data:([^;]+);base64,(.+)$/s.exec(url);
+  return match ? { type: match[1], data: match[2] } : null;
+};
+
+/** Gemini wants inlineData parts beside the text. */
+const googleParts = (message) => [
+  ...(message.text ? [{ text: message.text }] : []),
+  ...imagesOf(message)
+    .map((url) => {
+      const parsed = splitDataUrl(url);
+      return parsed ? { inlineData: { mimeType: parsed.type, data: parsed.data } } : null;
+    })
+    .filter(Boolean),
+];
+
+/** Anthropic wants image blocks beside the text block. */
+const anthropicContent = (message) => [
+  ...(message.text ? [{ type: 'text', text: message.text }] : []),
+  ...imagesOf(message)
+    .map((url) => {
+      const parsed = splitDataUrl(url);
+      return parsed
+        ? { type: 'image', source: { type: 'base64', media_type: parsed.type, data: parsed.data } }
+        : null;
+    })
+    .filter(Boolean),
+];
+
+/** OpenAI-compatible gateways (Ollama included) take image_url parts. */
+const openaiContent = (message) =>
+  imagesOf(message).length
+    ? [
+        ...(message.text ? [{ type: 'text', text: message.text }] : []),
+        ...imagesOf(message).map((url) => ({ type: 'image_url', image_url: { url } })),
+      ]
+    : message.text;
+
 /** One provider's streamed reply, as text chunks. */
 async function* streamText(route, { messages, system, signal }) {
   const provider = byId(route.id);
@@ -567,7 +638,7 @@ async function* streamText(route, { messages, system, signal }) {
     const body = {
       contents: messages.map((m) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.text }],
+        parts: googleParts(m),
       })),
       generationConfig: { maxOutputTokens: 4096 },
     };
@@ -603,7 +674,7 @@ async function* streamText(route, { messages, system, signal }) {
       model: route.model,
       max_tokens: 4096,
       stream: true,
-      messages: messages.map((m) => ({ role: m.role, content: m.text })),
+      messages: messages.map((m) => ({ role: m.role, content: anthropicContent(m) })),
     };
     if (system) body.system = system;
 
@@ -635,7 +706,7 @@ async function* streamText(route, { messages, system, signal }) {
   // Mistral, Z.ai, OpenRouter, LLM7.io, GitHub Models, OVHcloud.
   const payload = {
     model: route.model,
-    messages: [...(system ? [{ role: 'system', content: system }] : []), ...messages.map((m) => ({ role: m.role, content: m.text }))],
+    messages: [...(system ? [{ role: 'system', content: system }] : []), ...messages.map((m) => ({ role: m.role, content: openaiContent(m) }))],
     stream: true,
   };
 

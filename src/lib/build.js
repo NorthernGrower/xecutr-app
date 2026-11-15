@@ -3,4 +3,4 @@
  * copy can be checked at a glance: open /admin, read "app build", and know
  * whether the deployment has caught up with the repository.
  */
-export const BUILD = "2026-11-15 · server-side turns";
+export const BUILD = "2026-11-15 · paste images";

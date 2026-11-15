@@ -13,6 +13,7 @@ import useMediaJob from "@/hooks/use-media-job";
 import { attachArtifact, xecutrCatalog } from "@/lib/chat";
 import { mergeCatalog, modelLabel } from "@/lib/catalog";
 import { isTextLike, readKeys, readSettings, saveSettings } from "@/lib/providers";
+import { imageAttachment, imageFilesFrom } from "@/lib/images";
 import { fileBlocks, textOfMessage } from "@/lib/text-segments";
 import { addTrialMessage } from "@/lib/trial";
 
@@ -359,31 +360,67 @@ export default function ChatPane({
     }
   };
 
+  /** A pasted or chosen image: a thumbnail here, its data URL on the turn. */
+  const attachImage = async (file) => {
+    try {
+      const image = await imageAttachment(file);
+      if (!image) return;
+
+      // Keep the record usable in history even though the model gets the bytes.
+      let file_uri = "";
+      try {
+        const uploaded = await base44.integrations.Core.UploadPrivateFile({ file });
+        file_uri = uploaded?.file_uri || "";
+      } catch {
+        file_uri = "";
+      }
+
+      setAttachments((prev) =>
+        [...prev.filter((a) => !a.image), { name: image.name, file_uri, content: "", uploadId: null, image: image.dataUrl }].slice(-3),
+      );
+      setNotice(null);
+    } catch (err) {
+      setNotice(err?.message || "That image could not be attached.");
+    }
+  };
+
+  const onPaste = async (event) => {
+    const files = imageFilesFrom(event);
+    if (!files.length) return;
+    event.preventDefault();
+    for (const file of files) await attachImage(file);
+  };
+
   const submit = async () => {
     const text = prompt.trim();
-    if (!text || isLoading) return;
+    const hasImage = attachments.some((a) => a.image);
+    if ((!text && !hasImage) || isLoading) return;
+
     const payload = attachments.map((a) => ({
       name: a.name,
       content: a.content || "",
       uploadId: a.uploadId || null,
+      image: a.image || "",
     }));
+
+    const promptText = text || "Analyse the attached image and tell me what you see.";
 
     if (!trial && projectId) {
       await base44.entities.Message.create({
         project_id: projectId,
         role: "user",
-        content: text,
+        content: text || "[image]",
         attachments: attachments.map((a) => ({ name: a.name, file_uri: a.file_uri })),
       });
     } else {
-      addTrialMessage("user", text);
+      addTrialMessage("user", text || "[image]");
     }
 
-    lastPromptRef.current = text;
+    lastPromptRef.current = promptText;
     setPrompt("");
     setAttachments([]);
     await send({
-      text,
+      text: promptText,
       attachments: payload,
       providerId: settings.providerId,
       model: settings.model,
@@ -484,19 +521,42 @@ export default function ChatPane({
         )}
 
         {attachments.length > 0 && (
-          <div className="mb-2 flex items-center gap-2 rounded-sm border border-[#b0c4de]/25 bg-white/[0.02] px-3 py-1.5">
-            <Paperclip className="h-3 w-3 text-[#b0c4de]" />
-            <span className="truncate font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de]">
-              {attachments[0].name}
-            </span>
-            <button
-              type="button"
-              onClick={() => setAttachments([])}
-              className="ml-auto text-muted-foreground hover:text-white"
-              aria-label="Remove attachment"
-            >
-              <X className="h-3 w-3" />
-            </button>
+          <div className="mb-2 flex flex-wrap items-center gap-2 rounded-sm border border-[#b0c4de]/25 bg-white/[0.02] px-2.5 py-2">
+            {attachments.map((item, index) =>
+              item.image ? (
+                <div key={`${item.name}-${index}`} className="relative">
+                  <img
+                    src={item.image}
+                    alt={item.name}
+                    className="h-14 w-14 rounded-sm border border-white/10 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== index))}
+                    className="absolute -right-1.5 -top-1.5 rounded-full border border-white/20 bg-white p-0.5 text-muted-foreground shadow transition hover:text-red-600"
+                    aria-label="Remove image"
+                  >
+                    <X className="h-2.5 w-2.5" strokeWidth={2.4} />
+                  </button>
+                </div>
+              ) : (
+                <span
+                  key={`${item.name}-${index}`}
+                  className="inline-flex items-center gap-1.5 rounded-sm border border-white/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de]"
+                >
+                  <Paperclip className="h-3 w-3" />
+                  <span className="max-w-[160px] truncate">{item.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== index))}
+                    className="text-muted-foreground hover:text-red-600"
+                    aria-label="Remove attachment"
+                  >
+                    <X className="h-2.5 w-2.5" strokeWidth={2.4} />
+                  </button>
+                </span>
+              ),
+            )}
           </div>
         )}
 
@@ -504,6 +564,7 @@ export default function ChatPane({
           value={prompt}
           onChange={setPrompt}
           onSubmit={submit}
+          onPaste={onPaste}
           onPause={cancel}
           busy={isLoading}
           mode={mode}
@@ -515,7 +576,12 @@ export default function ChatPane({
                 <input
                   type="file"
                   className="hidden"
-                  onChange={(e) => upload(e.target.files?.[0])}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file && String(file.type || "").startsWith("image/")) attachImage(file);
+                    else upload(file);
+                    e.target.value = "";
+                  }}
                 />
               </label>
               {(trial || projectId) && (

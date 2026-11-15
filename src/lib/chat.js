@@ -37,6 +37,8 @@ export const turnSchema = z.object({
         content: z.string().max(200000).optional(),
         uploadId: z.string().max(120).nullish(),
         size: z.number().nullish(),
+        // A pasted image travels inline, small enough for a turn.
+        image: z.string().max(6_000_000).optional(),
       }),
     )
     .max(3)

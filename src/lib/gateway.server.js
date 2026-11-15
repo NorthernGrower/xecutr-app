@@ -76,7 +76,15 @@ export async function buildTurn(data, context) {
     name: a.name,
     content: (a.content || "").slice(0, anonymous ? 8000 : 120000),
     uploadId: anonymous ? null : a.uploadId || null,
+    image: typeof a.image === "string" ? a.image : "",
   }));
+
+  // Pasted images ride as data URLs: the model analyses the bytes, not a note
+  // about a file it cannot see.
+  const images = attachments
+    .map((a) => a.image)
+    .filter((value) => value.startsWith("data:image/"))
+    .slice(0, 3);
 
   const uploads = attachments.filter((a) => a.uploadId).map((a) => ({ id: a.uploadId, name: a.name }));
 
@@ -124,11 +132,15 @@ export async function buildTurn(data, context) {
   }
 
   return {
-    messages: withAttachments(messages, attachments),
+    messages: withAttachments(
+      messages,
+      attachments.filter((a) => !a.image),
+    ),
     target: "Web app",
     providerId: data.providerId || "",
     model: await localModel(data),
     turnId: data.turnId || "",
+    images,
     allowPaid: false,
     memory,
     files,
