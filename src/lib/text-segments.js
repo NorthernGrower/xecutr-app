@@ -1,7 +1,7 @@
 const FENCE = /```([^\n]*)\n([\s\S]*?)```/g;
 
 /** The media tool's markers: the app turns these into real files. */
-const MEDIA_MARK = /\[\[\s*(image|video)\s*:\s*([^\]]{3,900})\]\]/gi;
+const MEDIA_MARK = /\[\[\s*(image|video|music)\s*:\s*([^\]]{3,900})\]\]/gi;
 
 /**
  * Pull `[[image: …]]` / `[[video: …]]` markers out of a reply. What is left is

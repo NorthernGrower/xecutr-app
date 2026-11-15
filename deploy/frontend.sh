@@ -208,6 +208,7 @@ docker run -d --name xecutr-media --restart unless-stopped --network host \
   -e PORT=8090 \
   -e MEDIA_IMAGE_MODEL="${MEDIA_IMAGE_MODEL:-stabilityai/sd-turbo}" \
   -e MEDIA_VIDEO_MODEL="${MEDIA_VIDEO_MODEL:-animatediff}" \
+  -e MEDIA_MUSIC_MODEL="${MEDIA_MUSIC_MODEL:-facebook/musicgen-small}" \
   xecutr-media >/dev/null
 
 # ------------------------------------------------------------ start the gateway

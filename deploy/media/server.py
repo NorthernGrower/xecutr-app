@@ -15,6 +15,7 @@ Environment:
   MEDIA_DATA         where generated files live      (default /data/media)
   MEDIA_IMAGE_MODEL  text-to-image model             (default stabilityai/sd-turbo)
   MEDIA_VIDEO_MODEL  animatediff | modelscope        (default animatediff)
+  MEDIA_MUSIC_MODEL  text-to-music model             (default facebook/musicgen-small)
   MEDIA_IDLE_UNLOAD  seconds idle before freeing RAM  (default 420)
   PORT               listen port                     (default 8090)
 """
@@ -45,10 +46,12 @@ ANIMATEDIFF_ADAPTER = os.environ.get("MEDIA_ANIMATEDIFF_ADAPTER", "guoyww/animat
 ANIMATEDIFF_LORA = os.environ.get("MEDIA_ANIMATEDIFF_LORA", "ByteDance/AnimateDiff-Lightning")
 ANIMATEDIFF_WEIGHTS = os.environ.get("MEDIA_ANIMATEDIFF_WEIGHTS", "animatediff_lightning_4step_diffusers.safetensors")
 MODELSCOPE_MODEL = os.environ.get("MEDIA_MODELSCOPE_MODEL", "damo-vilab/text-to-video-ms-1.7b")
+MUSIC_MODEL = os.environ.get("MEDIA_MUSIC_MODEL", "facebook/musicgen-small")
 
 LIMITS = {
     "image": {"size": (256, 768), "steps": (1, 8)},
     "video": {"size": (256, 640), "steps": (1, 8), "frames": (8, 32)},
+    "music": {"duration": (5, 30)},
 }
 
 JOBS = {}
@@ -57,7 +60,7 @@ QUEUE = queue.Queue()
 RUNNING = threading.Event()
 LAST_USED = [time.time()]
 
-PIPES = {"image": None, "video": None}
+PIPES = {"image": None, "video": None, "music": None}
 
 CONTENT_TYPES = {
     ".jpg": "image/jpeg",
@@ -66,6 +69,7 @@ CONTENT_TYPES = {
     ".webp": "image/webp",
     ".gif": "image/gif",
     ".mp4": "video/mp4",
+    ".wav": "audio/wav",
 }
 
 
@@ -90,6 +94,21 @@ def load_image():
     pipe.set_progress_bar_config(disable=True)
     log("image model ready")
     return pipe
+
+
+def load_music():
+    """MusicGen (facebook/musicgen-small): a T5 text encoder plus a small audio
+    decoder — the lightest open HF music model there is, and it runs on CPU."""
+    import torch
+    from transformers import AutoProcessor, MusicgenForConditionalGeneration
+
+    log(f"loading music model {MUSIC_MODEL} (this pulls ~2.3 GB the first time)")
+    processor = AutoProcessor.from_pretrained(MUSIC_MODEL)
+    model = MusicgenForConditionalGeneration.from_pretrained(MUSIC_MODEL, torch_dtype=torch.float32)
+    # 4.48 moved the audio encoder config off generation_config onto config.
+    rate = getattr(getattr(model.config, "audio_encoder", None), "sampling_rate", 32000)
+    log(f"music model ready ({rate} Hz)")
+    return {"model": model, "processor": processor, "rate": rate}
 
 
 def load_video():
@@ -132,14 +151,17 @@ def load_video():
     return pipe
 
 
+LOADERS = {"image": load_image, "video": load_video, "music": load_music}
+
+
 def pipe_for(kind):
     """Load on demand, and hold only one kind of model in RAM at a time."""
-    other = "video" if kind == "image" else "image"
-    if PIPES[other] is not None:
-        PIPES[other] = None
-        gc.collect()
+    for other in PIPES:
+        if other != kind and PIPES[other] is not None:
+            PIPES[other] = None
+            gc.collect()
     if PIPES[kind] is None:
-        PIPES[kind] = load_image() if kind == "image" else load_video()
+        PIPES[kind] = LOADERS[kind]()
     LAST_USED[0] = time.time()
     return PIPES[kind]
 
@@ -152,7 +174,7 @@ def idle_collector():
             continue
         if time.time() - LAST_USED[0] < IDLE_UNLOAD:
             continue
-        if PIPES["image"] is None and PIPES["video"] is None:
+        if PIPES["image"] is None and PIPES["video"] is None and PIPES["music"] is None:
             continue
         PIPES["image"] = None
         PIPES["video"] = None
@@ -231,6 +253,60 @@ def run_video(job):
     job["file"] = name
 
 
+# MusicGen emits 50 audio tokens for every second of sound, so a requested
+# duration is a token budget and the progress is how much of it has been spent.
+MUSIC_TOKENS_PER_SECOND = 50
+
+
+def run_music(job):
+    import wave
+
+    import numpy as np
+    import torch
+    from transformers import StoppingCriteria
+
+    pipe = pipe_for("music")
+    seconds = int(job["params"].get("seconds") or 10)
+    seed = int(job["params"].get("seed") if job["params"].get("seed") is not None else random.randrange(1, 2**31))
+    job["seed"] = seed
+    torch.manual_seed(seed)
+
+    tokens = max(1, seconds * MUSIC_TOKENS_PER_SECOND)
+
+    class Progress(StoppingCriteria):
+        """Report how far generation has got — never stops the music early."""
+
+        def __call__(self, input_ids, scores, **kwargs):  # noqa: ARG002 — the signature is HF's
+            job["progress"] = round(0.2 + 0.7 * min(1.0, input_ids.shape[-1] / tokens), 3)
+            return False
+
+    inputs = pipe["processor"](
+        text=[job["prompt"]],
+        truncation=True,
+        padding=True,
+        return_tensors="pt",
+    )
+    result = pipe["model"].generate(
+        **inputs,
+        do_sample=True,
+        max_new_tokens=tokens,
+        stopping_criteria=[Progress()],
+    )
+
+    job["progress"] = 0.95
+    audio = np.clip(result[0, 0].float().cpu().numpy(), -1.0, 1.0)
+    # 16-bit PCM: WAV written from float32 is unplayable in some browsers.
+    pcm = (audio * 32767.0).astype("<i2")
+
+    name = f"{job['id']}.wav"
+    with wave.open(str(DATA / name), "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(int(pipe["rate"]))
+        out.writeframes(pcm.tobytes())
+    job["file"] = name
+
+
 def worker():
     while True:
         job = QUEUE.get()
@@ -244,8 +320,10 @@ def worker():
         try:
             if job["kind"] == "image":
                 run_image(job)
-            else:
+            elif job["kind"] == "video":
                 run_video(job)
+            else:
+                run_music(job)
             job["status"] = "done"
             job["progress"] = 1.0
             log(f"{job['kind']} job {job['id']} done in {time.time() - started:.1f}s")
@@ -267,8 +345,8 @@ def worker():
 
 def sanitise(body):
     kind = body.get("kind")
-    if kind not in ("image", "video"):
-        raise ValueError("kind must be 'image' or 'video'")
+    if kind not in ("image", "video", "music"):
+        raise ValueError("kind must be 'image', 'video' or 'music'")
 
     prompt = str(body.get("prompt") or "").strip()
     if not prompt:
@@ -285,6 +363,13 @@ def sanitise(body):
         except (TypeError, ValueError):
             value = default
         return max(low, min(high, value))
+
+    if kind == "music":
+        low, high = limits["duration"]
+        params["seconds"] = bounded("seconds", 10, low, high)
+        if body.get("seed") not in (None, ""):
+            params["seed"] = bounded("seed", 0, 0, 2**31 - 1)
+        return {"kind": kind, "prompt": prompt, "params": params}
 
     size_low, size_high = limits["size"]
     params["size"] = bounded("size", 512, size_low, size_high)
@@ -323,7 +408,9 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt, *args):  # noqa: A003 — quieter access log
-        if "/health" not in (args[0] if args else ""):
+        # Skip the media service's own health probes; args[0] can be an
+        # HTTPStatus (a code, not the path), so match on the request path.
+        if "/health" not in (self.path or ""):
             log(f"{self.address_string()} {fmt % args}")
 
     def _json(self, status, payload):
@@ -358,6 +445,7 @@ class Handler(BaseHTTPRequestHandler):
                     "device": "cpu",
                     "image_model": IMAGE_MODEL,
                     "video_model": VIDEO_MODEL if VIDEO_MODEL == "modelscope" else f"AnimateDiff-Lightning/{ANIMATEDIFF_BASE}",
+                    "music_model": MUSIC_MODEL,
                     "loaded": [k for k, v in PIPES.items() if v is not None],
                     "busy": RUNNING.is_set(),
                     "queued": QUEUE.qsize(),

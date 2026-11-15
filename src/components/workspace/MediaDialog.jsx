@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Clapperboard, Image as ImageIcon, Loader2 } from "lucide-react";
+import { Clapperboard, Image as ImageIcon, Loader2, Music2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import { mediaHealth } from "@/lib/media";
 const KINDS = [
   { id: "image", label: "image", icon: ImageIcon, hint: "seconds per image on this CPU" },
   { id: "video", label: "clip", icon: Clapperboard, hint: "minutes per clip on this CPU" },
+  { id: "music", label: "music", icon: Music2, hint: "about a minute per track on this CPU" },
 ];
 
 const SIZES = [384, 512, 640];
@@ -38,6 +39,7 @@ export default function MediaDialog({ open, onOpenChange, onGenerated }) {
   const [size, setSize] = useState(512);
   const [steps, setSteps] = useState(2);
   const [frames, setFrames] = useState(16);
+  const [seconds, setSeconds] = useState(10);
   const [health, setHealth] = useState(null);
 
   const { job, error, busy, run } = useMediaJob();
@@ -61,9 +63,11 @@ export default function MediaDialog({ open, onOpenChange, onGenerated }) {
     if (!text || busy) return;
 
     const request =
-      kind === "image"
-        ? { kind, prompt: text, size, steps }
-        : { kind, prompt: text, size, steps: Math.max(steps, 4), frames };
+      kind === "music"
+        ? { kind, prompt: text, seconds }
+        : kind === "image"
+          ? { kind, prompt: text, size, steps }
+          : { kind, prompt: text, size, steps: Math.max(steps, 4), frames };
 
     const done = await run(request);
     if (done) onGenerated?.({ ...done, kind, prompt: text });
@@ -81,7 +85,8 @@ export default function MediaDialog({ open, onOpenChange, onGenerated }) {
           </DialogTitle>
           <DialogDescription className="font-body text-[12px] leading-relaxed text-muted-foreground">
             Runs the open Hugging Face models installed on this server. One job at a time — images
-            take seconds, clips take minutes, and a running job holds the model in RAM.
+            take seconds, a short track about a minute, clips take minutes, and a running job holds
+            the model in RAM.
           </DialogDescription>
         </DialogHeader>
 
@@ -117,25 +122,43 @@ export default function MediaDialog({ open, onOpenChange, onGenerated }) {
           />
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <Field label="size">
-              <select value={size} onChange={(e) => setSize(Number(e.target.value))} className={selectClass}>
-                {SIZES.map((value) => (
-                  <option key={value} value={value}>
-                    {value}px
-                  </option>
-                ))}
-              </select>
-            </Field>
+            {kind === "music" ? (
+              <Field label="length">
+                <select
+                  value={seconds}
+                  onChange={(e) => setSeconds(Number(e.target.value))}
+                  className={selectClass}
+                >
+                  {[5, 10, 15, 20, 30].map((value) => (
+                    <option key={value} value={value}>
+                      {value}s
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : (
+              <>
+                <Field label="size">
+                  <select value={size} onChange={(e) => setSize(Number(e.target.value))} className={selectClass}>
+                    {SIZES.map((value) => (
+                      <option key={value} value={value}>
+                        {value}px
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
-            <Field label="steps">
-              <select value={steps} onChange={(e) => setSteps(Number(e.target.value))} className={selectClass}>
-                {(kind === "image" ? [1, 2, 3, 4] : [2, 4, 6, 8]).map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-            </Field>
+                <Field label="steps">
+                  <select value={steps} onChange={(e) => setSteps(Number(e.target.value))} className={selectClass}>
+                    {(kind === "image" ? [1, 2, 3, 4] : [2, 4, 6, 8]).map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </>
+            )}
 
             {kind === "video" && (
               <Field label="frames">
@@ -179,6 +202,8 @@ export default function MediaDialog({ open, onOpenChange, onGenerated }) {
             <figure className="overflow-hidden rounded-sm border border-white/10 bg-black/30">
               {job.kind === "video" ? (
                 <video src={src} controls playsInline className="w-full" />
+              ) : job.kind === "music" ? (
+                <audio src={src} controls className="w-full p-2" />
               ) : (
                 <img src={src} alt={job.prompt || "generated"} className="w-full" />
               )}
@@ -190,7 +215,7 @@ export default function MediaDialog({ open, onOpenChange, onGenerated }) {
 
           <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground/70">
             {health?.ok
-              ? `${health.image_model} · ${health.video_model}`
+              ? `${health.image_model} · ${health.video_model} · ${health.music_model}`
               : health?.error || "checking the media service…"}
           </p>
         </form>

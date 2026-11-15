@@ -17,6 +17,9 @@ import { addTrialMessage } from "@/lib/trial";
 const MAX_UPLOAD = 25 * 1024 * 1024;
 const MAX_INSPECT = 8 * 1024 * 1024;
 
+/** A generated asset is saved with an extension its own element can play. */
+const MEDIA_EXT = { image: "jpg", video: "mp4", music: "wav" };
+
 const readBase64 = (file) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -145,7 +148,7 @@ export default function ChatPane({
         return;
       }
 
-      const ext = done.kind === "video" ? "mp4" : "jpg";
+      const ext = MEDIA_EXT[done.kind] || "bin";
       const path = `assets/generated/${done.kind}-${done.id}.${ext}`;
       attachRef.current(messageId, [
         {
@@ -166,7 +169,7 @@ export default function ChatPane({
     async (done) => {
       const content = done?.dataUrl || done?.url;
       if (!content) return;
-      const ext = done.kind === "video" ? "mp4" : "jpg";
+      const ext = MEDIA_EXT[done.kind] || "bin";
       await writeFiles([{ path: `assets/generated/${done.kind}-${done.id}.${ext}`, content }]);
       savedRef.current?.();
     },
@@ -438,7 +441,7 @@ export default function ChatPane({
                 <button
                   type="button"
                   onClick={() => setMediaOpen(true)}
-                  title="Generate an image or a clip with this server's own models"
+                  title="Generate an image, a clip or a track with this server's own models"
                   className="rounded-sm border border-white/10 p-1.5 text-muted-foreground transition hover:border-[#b0c4de]/40 hover:text-white"
                 >
                   <ImageIcon className="h-3 w-3" strokeWidth={1.6} />

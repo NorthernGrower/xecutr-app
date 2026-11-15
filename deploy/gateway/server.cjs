@@ -98,9 +98,13 @@ const systemPrompt = (body, uploadNotes) => {
     'This project can generate media on this server. When the user asks for an image, ' +
       'add one line of exactly this shape: [[image: a vivid one-sentence description]] . ' +
       'When they ask for a video or an animation, add: [[video: a vivid one-sentence description]] . ' +
-      'The app turns each marker into a real file in the project, so describe the weather, ' +
-      'light, colours, subject and style — not the code. Use at most one marker per reply, ' +
-      'and only when the user asked for media: images take seconds, clips take minutes.',
+      'When they ask for music, a song, a soundtrack or a jingle, add: ' +
+      '[[music: genre, instruments, tempo and mood]] . ' +
+      'The app turns each marker into a real file in the project, so describe the result, ' +
+      'not the code: for images and clips the weather, light, colours, subject and style, ' +
+      'and for music the genre, instruments, tempo and mood. Use at most one marker per reply, ' +
+      'and only when the user asked for media: images take seconds, music about a minute, ' +
+      'clips take minutes.',
   );
   if (uploadNotes.length) parts.push(uploadNotes.join('\n'));
   return parts.filter(Boolean).join('\n\n');

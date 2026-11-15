@@ -24,7 +24,7 @@ function FileChip({ path, language, onOpen }) {
   );
 }
 
-/** A generated image or clip, shown where the reply asked for it. */
+/** A generated image, clip or track, shown where the reply asked for it. */
 function MediaTile({ item }) {
   const src = item.dataUrl || item.url;
   if (!src) return null;
@@ -32,6 +32,8 @@ function MediaTile({ item }) {
     <figure className="mt-2 overflow-hidden rounded-sm border border-white/10 bg-black/30">
       {item.kind === "video" ? (
         <video src={src} controls playsInline className="w-full" />
+      ) : item.kind === "music" ? (
+        <audio src={src} controls className="w-full p-2" />
       ) : (
         <img src={src} alt={item.prompt || item.path || "generated"} className="w-full" />
       )}
