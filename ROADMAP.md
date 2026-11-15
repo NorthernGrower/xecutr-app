@@ -64,8 +64,11 @@ visible to the person using the product.
       automatically.
 - [ ] **Refusal corpus.** Store every refusal and escalation (prompt hash, model,
       reason) so routing improves from real traffic.
-- [ ] **UI:** a small "routing" strip on the reply — model, why, and the
-      escalation trail when there was one.
+- [x] **Routing strip on every reply.** Which model answered, why it was chosen
+      (`pinned by you`, `long turn`, `many project files`, `heavy task`, `fast
+      default`), and the escalation trail (`qwen2.5-coder:7b → OmniCoder ·
+      escalated · refusal`). Stored with the message when the deployment's schema
+      allows it, and shown live regardless.
 
 ## Phase 2 — Verification (what makes it a harness, not a chatbot)
 
@@ -164,7 +167,7 @@ visible to the person using the product.
 - [ ] Sandboxed build + test after a build turn (Phase 2) — the second biggest.
 - [ ] Media gallery per project with delete/regenerate (Phase 5).
 - [ ] Assets by reference instead of base64 (Phase 5).
-- [ ] Routing strip in the reply UI (Phase 1).
+- [x] Routing strip in the reply UI (Phase 1).
 - [ ] Admin: media health, routing counts, escalation reasons (Phase 7).
 - [ ] Retrieval over project files (Phase 3).
 - [ ] Diff + undo per turn (Phase 2).
@@ -183,8 +186,12 @@ visible to the person using the product.
   (`huihui_ai/qwen3.5-abliterated:9b-OmniCoder`). It is the largest local model
   that still answers quickly here, and it is what both routing and escalation use
   today (`OLLAMA_ROUTE_MODEL` and `OLLAMA_FALLBACK_MODEL` on the VPS).
-- The **27B** (`coder:latest`) is not used for routing or fallback: it responds
-  too slowly on this CPU. It stays available as a manual pick in the model list,
-  and can be removed from the list entirely if the owner prefers.
+- The **27B** was deleted from the VPS on 2026-11-15 (about 15 GB of disk freed);
+  the picker lists only the 7B and the 9B, and neither routing nor escalation can
+  reach a model that is no longer installed.
+- Every reply carries its **routing strip**: the model, the reason it was chosen,
+  and the escalation trail when the local abliterated model took over. The
+  reasons come from the gateway itself, so the strip cannot drift from what
+  actually happened.
 - Signed-in is the unlimited path; the trial keeps its daily caps.
 - Default model stays the fast local 7B; OmniCoder stays pickable.

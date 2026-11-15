@@ -156,14 +156,19 @@ const looksLikeRefusal = (text) => {
 
 /**
  * Best model first: a pinned choice wins, otherwise a long or heavy prompt goes
- * to the routed model and everything else to the fast default.
+ * to the routed model and everything else to the fast default. The reason rides
+ * along so the app can say why it picked what it picked.
  */
 const pickModel = (body, requested) => {
-  if (requested) return requested;
+  if (requested) return { model: requested, reason: 'pinned by you' };
+  if (!ROUTE_MODEL) return { model: DEFAULT_MODEL, reason: 'fast default' };
+
   const text = (body.messages || []).map((m) => m.text || m.content || '').join('\n');
   const files = Array.isArray(body.files) ? body.files : [];
-  const heavy = text.length > 1200 || files.length > 12 || (text.length > 400 && HEAVY_TASK.test(text));
-  return heavy && ROUTE_MODEL ? ROUTE_MODEL : DEFAULT_MODEL;
+  if (text.length > 1200) return { model: ROUTE_MODEL, reason: 'long turn' };
+  if (files.length > 12) return { model: ROUTE_MODEL, reason: 'many project files' };
+  if (text.length > 400 && HEAVY_TASK.test(text)) return { model: ROUTE_MODEL, reason: 'heavy task' };
+  return { model: DEFAULT_MODEL, reason: 'fast default' };
 };
 
 /**
@@ -334,19 +339,25 @@ const chatTurn = async (req, res) => {
   ].filter((m) => m.content);
 
   const primary = pickModel(body, body.model || '');
-  sse(res, { type: 'route', providerName: 'Ollama (this server)', modelLabel: primary });
+  sse(res, {
+    type: 'route',
+    providerName: 'Ollama (this server)',
+    modelLabel: primary.model,
+    reason: primary.reason,
+  });
 
-  let answer = await upstreamTurn({ model: primary, messages, res, hedge: true });
+  let answer = await upstreamTurn({ model: primary.model, messages, res, hedge: true });
 
   // A refusal or a failed turn is not an answer: give it to the local
   // unrestricted model, and its file blocks land in the project like any other.
-  if ((!answer.ok || answer.refusal) && FALLBACK_MODEL && FALLBACK_MODEL !== primary) {
+  if ((!answer.ok || answer.refusal) && FALLBACK_MODEL && FALLBACK_MODEL !== primary.model) {
     sse(res, {
       type: 'route',
       providerName: 'Local fallback',
       modelLabel: FALLBACK_MODEL,
       escalated: true,
       reason: answer.ok ? 'refusal' : 'error',
+      from: primary.model,
     });
     answer = await upstreamTurn({ model: FALLBACK_MODEL, messages, res, hedge: false });
   }

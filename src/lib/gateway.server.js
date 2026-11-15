@@ -149,6 +149,8 @@ export async function readTurn(response) {
   let providerName = "xecutr";
   let modelLabel = "auto";
   const files = [];
+  /** Every route the gateway announced: the model, why, and any escalation. */
+  const routes = [];
 
   const handle = (frame) => {
     const payload = frame
@@ -168,6 +170,13 @@ export async function readTurn(response) {
     if (event.type === "route") {
       providerName = event.providerName || event.providerId || providerName;
       modelLabel = event.modelLabel || event.model || modelLabel;
+      routes.push({
+        provider: providerName,
+        model: modelLabel,
+        reason: typeof event.reason === "string" ? event.reason : "",
+        escalated: Boolean(event.escalated),
+        from: typeof event.from === "string" ? event.from : "",
+      });
     } else if (event.type === "text") {
       text += event.text || "";
     } else if (event.type === "files") {
@@ -195,5 +204,5 @@ export async function readTurn(response) {
   }
 
   if (failure) throw Object.assign(new Error(failure), { status: 502 });
-  return { text, files, providerName, modelLabel };
+  return { text, files, providerName, modelLabel, routes };
 }

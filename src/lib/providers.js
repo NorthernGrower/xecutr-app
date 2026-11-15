@@ -43,10 +43,9 @@ export const PROVIDERS = [
     free: true,
     /** Pulled on the host that runs the gateway — no key, no quota. */
     models: [
-      "coder:latest",
       "qwen2.5-coder:7b",
+      "huihui_ai/qwen3.5-abliterated:9b-OmniCoder",
       "qwen2.5-coder:3b",
-      "huihui_ai/Qwen3.8-abliterated",
       "llama3.2:3b",
     ],
   },

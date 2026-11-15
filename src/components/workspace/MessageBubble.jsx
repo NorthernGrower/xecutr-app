@@ -59,7 +59,47 @@ function ToolCard({ part }) {
   );
 }
 
-/** One chat message: provider label, prose, written-file rows and tool cards. */
+/**
+ * Why the harness answered with the model it did: the model, the reason it was
+ * chosen, and the escalation trail when a refusal was re-run on the local model.
+ */
+function RouteStrip({ routes, provider, model }) {
+  const trail = (Array.isArray(routes) ? routes : []).filter((r) => r && (r.model || r.provider));
+  const last = trail[trail.length - 1];
+  const label = last?.provider || provider;
+  const name = last?.model || model;
+  if (!label && !name) return null;
+
+  const escalated = trail.length > 1 && trail.some((r) => r.escalated);
+  const started = trail[0]?.model;
+  const reason = escalated ? last?.reason : trail[0]?.reason;
+
+  return (
+    <div
+      className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10px] uppercase tracking-[0.16em]"
+      title={trail
+        .map((r) => `${r.provider}: ${r.model}${r.reason ? ` — ${r.reason}` : ""}`)
+        .join("\n")}
+    >
+      <span className="inline-block h-1 w-1 rounded-full bg-[#e0f7ff]" />
+      <span className="text-[#b0c4de]">{label}</span>
+      {escalated && started && started !== name ? (
+        <span className="min-w-0 truncate text-[#dfe6ee]">
+          {started} → {name}
+        </span>
+      ) : (
+        name && <span className="min-w-0 truncate text-[#dfe6ee]">{name}</span>
+      )}
+      {reason && (
+        <span className={escalated ? "text-[#e0f7ff]/80" : "text-muted-foreground/70"}>
+          {escalated ? `escalated · ${reason}` : `· ${reason}`}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** One chat message: routing strip, prose, written-file rows and tool cards. */
 export default function MessageBubble({ message, onOpenFile }) {
   const isUser = message.role === "user";
   const text = textOfMessage(message);
@@ -77,13 +117,7 @@ export default function MessageBubble({ message, onOpenFile }) {
           isUser ? "border-white/10 bg-white/[0.045]" : "border-[#b0c4de]/20 bg-[#0d0d0d]"
         }`}
       >
-        {!isUser && (message.provider || message.model) && (
-          <div className="mb-2 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#b0c4de]">
-            <span className="inline-block h-1 w-1 rounded-full bg-[#e0f7ff]" />
-            {message.provider}
-            {message.model ? ` · ${message.model}` : ""}
-          </div>
-        )}
+        {!isUser && <RouteStrip routes={message.route} provider={message.provider} model={message.model} />}
 
         {media.map((item) => (
           <MediaTile key={item.path} item={item} />

@@ -185,7 +185,7 @@ export default function ChatPane({
   );
 
   const persist = useCallback(
-    async ({ text, provider, model }) => {
+    async ({ text, provider, model, route }) => {
       const pid = projectRef.current;
       if (!text) return;
 
@@ -194,13 +194,21 @@ export default function ChatPane({
         return;
       }
 
-      await base44.entities.Message.create({
+      const turn = {
         project_id: pid,
         role: "assistant",
         content: text,
         provider,
         model,
-      });
+      };
+
+      try {
+        // Which model answered, why it was chosen, and any escalation trail.
+        await base44.entities.Message.create({ ...turn, route: Array.isArray(route) ? route : [] });
+      } catch {
+        // A deployment whose Message schema does not know `route` yet still saves the turn.
+        await base44.entities.Message.create(turn);
+      }
 
       // Fallback for replies that declared files inline instead of through a tool.
       // A plan turn never writes, even if the model emitted file blocks anyway.

@@ -25,6 +25,29 @@
     "model": {
       "type": "string"
     },
+    "route": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "escalated": {
+            "type": "boolean"
+          },
+          "from": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "attachments": {
       "type": "array",
       "items": {

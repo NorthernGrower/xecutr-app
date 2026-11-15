@@ -61,6 +61,7 @@ export default function useXecutrChat({ initialMessages = [], onFiles, onMedia, 
                 ...m,
                 provider: result?.providerName,
                 model: result?.modelLabel,
+                route: result?.routes || [],
                 parts: reply ? [{ type: "text", content: reply }] : [],
               }
             : m,
@@ -78,6 +79,7 @@ export default function useXecutrChat({ initialMessages = [], onFiles, onMedia, 
           text: reply,
           provider: result?.providerName,
           model: result?.modelLabel,
+          route: result?.routes || [],
         });
       }
     } catch (err) {
