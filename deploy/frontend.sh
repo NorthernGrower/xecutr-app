@@ -116,7 +116,10 @@ log "Building the front-end"
 # they ship in every visitor's bundle, see src/lib/app-params.js).
 VITE_BASE44_APP_ID="${VITE_BASE44_APP_ID:-6af5fbfbeb8a5b4111b2a97d}" \
 VITE_BASE44_FUNCTIONS_VERSION="${VITE_BASE44_FUNCTIONS_VERSION:-prod}" \
-npm run build || fail "The build failed. Paste the lines above this message and I'll fix the cause."
+npm run build -- --outDir dist.next || fail "The build failed. Paste the lines above this message and I'll fix the cause."
+# Swap only after a successful build: while it builds, visitors keep the running
+# app instead of landing on a half-written one and a missing script file.
+rm -rf dist && mv dist.next dist
 
 # -------------------------------------------------------------------- start
 # The app is a TanStack Start SSR build. Depending on how it was exported it may

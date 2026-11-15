@@ -6,7 +6,7 @@
  * a fresh document — so the failure reloads once, and a second failure moments
  * later is shown as an error instead of reloading forever.
  */
-const KEY = "xecutr:chunk-reload-at";
+const KEY = "xecutr:reload-at";
 const RETRY_WINDOW = 15000;
 
 const PATTERNS = [

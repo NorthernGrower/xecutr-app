@@ -69,7 +69,9 @@ if printf '%s\n' "${changed}" | grep -Eq '^(src|public|package\.json|vite\.confi
     # The app's Base44 identity is baked in at build time (public client-side values).
     VITE_BASE44_APP_ID="${VITE_BASE44_APP_ID:-6af5fbfbeb8a5b4111b2a97d}" \
     VITE_BASE44_FUNCTIONS_VERSION="${VITE_BASE44_FUNCTIONS_VERSION:-prod}" \
-    npm run build
+    npm run build -- --outDir dist.next
+    # Swap only once the build is complete, so nobody is served a half-written app.
+    rm -rf dist && mv dist.next dist
 fi
 
 # Restart a service only when its inputs changed.
