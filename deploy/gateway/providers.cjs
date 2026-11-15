@@ -53,6 +53,17 @@ const PROVIDERS = [
     note: 'Runs the models pulled on this server. Private, free, and the fallback when a hosted model refuses a turn.',
   },
   {
+    id: 'openai',
+    name: 'OpenAI',
+    subtitle: 'ChatGPT models · your own key',
+    apiBaseUrl: 'https://api.openai.com/v1',
+    environmentVariable: 'OPENAI_API_KEY',
+    signupUrl: 'https://platform.openai.com/api-keys',
+    freeTier: false,
+    defaultModel: 'gpt-4o-mini',
+    note: 'Billed per token to your OpenAI account. Listed here only when a key is set.',
+  },
+  {
     id: 'groq',
     name: 'Groq',
     subtitle: 'Open models · free tier',
@@ -188,7 +199,7 @@ const NON_CHAT_TERMS = [
   'tts', 'stt', 'asr', 'whisper', 'embed', 'rerank', 'speech', 'voice', 'audio',
   'moderation', 'guard', 'bge', 'image', 'img', 'flux', 'diffusion', 'sdxl',
   'video', 'clip', 'ocr', 'lyria', 'musicgen', 'suno', 'dall', 'sora', 'veo',
-  'kling', 'stable-diffusion',
+  'kling', 'stable-diffusion', 'realtime', 'davinci', 'babbage', 'instruct',
 ];
 
 const looksLikeChatModel = (id) => {
@@ -299,6 +310,12 @@ const modelsRequest = (provider, apiKey) => {
             .filter((model) => typeof model?.id === 'string')
             .map((model) => ({ id: model.id, label: model.id, note: 'this server' })),
       };
+    case 'openai':
+      return {
+        url: `${base}/models`,
+        headers: { accept: 'application/json', authorization: `Bearer ${apiKey}` },
+        extract: (payload) => listed(payload, 'your account'),
+      };
     case 'mistral':
     case 'llm7':
     case 'ovh':
@@ -371,15 +388,16 @@ const bestModel = (models) =>
  */
 const SPEED = {
   anthropic: 0,
-  groq: 1,
-  cerebras: 2,
-  google: 3,
-  mistral: 4,
-  openrouter: 5,
-  zai: 6,
-  github: 7,
-  llm7: 8,
-  ovh: 9,
+  openai: 1,
+  groq: 2,
+  cerebras: 3,
+  google: 4,
+  mistral: 5,
+  openrouter: 6,
+  zai: 7,
+  github: 8,
+  llm7: 9,
+  ovh: 10,
 };
 
 /**
@@ -387,7 +405,7 @@ const SPEED = {
  * harness prefers one of these, because a text-only model would answer about a
  * picture it never received.
  */
-const VISION_MODEL = /(vl|vision|llava|omni|qwen3\.5|qwen2\.5-vl|gemma3)/i;
+const VISION_MODEL = /(vl|vision|llava|omni|qwen3\.5|qwen2\.5-vl|gemma3|gpt-4|gpt-5|^o[13])/i;
 
 const visionModel = (models) => models.find((model) => VISION_MODEL.test(model.id)) || null;
 

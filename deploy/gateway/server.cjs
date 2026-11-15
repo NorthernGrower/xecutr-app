@@ -25,7 +25,7 @@
  *   OLLAMA_FALLBACK_MODEL local abliterated model used when a turn is refused
  *   GROQ_API_KEY, GEMINI_API_KEY, MISTRAL_API_KEY, CEREBRAS_API_KEY,
  *   ZAI_API_KEY, OPENROUTER_API_KEY, LLM7_API_KEY, GITHUB_MODELS_TOKEN,
- *   ANTHROPIC_API_KEY  hosted providers (see providers.cjs); absent ones are
+ *   OPENAI_API_KEY, ANTHROPIC_API_KEY  hosted providers (see providers.cjs); absent ones are
  *                   simply not offered, so the picker only lists usable models
  *   FRONTEND_ORIGIN  where the app build runs       (default http://127.0.0.1:8082)
  *   BASE44_BACKEND   where Base44's platform lives  (default https://base44.app)

@@ -27,6 +27,11 @@ export default function ProviderRow({ provider, expanded, selectedModel, onToggl
                 free
               </span>
             )}
+            {!provider.free && !provider.keyless && !provider.local && (
+              <span className="rounded-sm border border-violet-500/30 px-1 py-px font-mono text-[8px] uppercase tracking-[0.12em] text-violet-700">
+                paid
+              </span>
+            )}
             {provider.local && (
               <span className="rounded-sm border border-amber-500/30 px-1 py-px font-mono text-[8px] uppercase tracking-[0.12em] text-amber-700">
                 last resort

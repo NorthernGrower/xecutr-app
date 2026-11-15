@@ -50,6 +50,15 @@ export const PROVIDERS = [
     ],
   },
   {
+    id: "openai",
+    label: "OpenAI",
+    baseURL: "https://api.openai.com/v1",
+    defaultModel: "gpt-4o-mini",
+    connect: "https://platform.openai.com/api-keys",
+    /** Billed to whoever owns the key; the live list comes from OpenAI itself. */
+    models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1", "o3-mini"],
+  },
+  {
     id: "ovh",
     label: "OVHcloud AI",
     baseURL: "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
