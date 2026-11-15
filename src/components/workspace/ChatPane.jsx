@@ -501,7 +501,7 @@ export default function ChatPane({
           mode={mode}
           onModeChange={setMode}
           footer={
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <label className="cursor-pointer rounded-sm border border-white/10 p-1.5 text-muted-foreground transition hover:border-[#b0c4de]/40 hover:text-white">
                 <Paperclip className="h-3 w-3" strokeWidth={1.6} />
                 <input

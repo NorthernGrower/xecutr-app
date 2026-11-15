@@ -6,23 +6,22 @@ const MODES = [
   { id: "build", label: "build", icon: Hammer, title: "Build — the AI writes the files" },
 ];
 
-/** The prompt window's height is a device preference: set it once, kept. */
+/**
+ * The prompt window's height follows the screen by default (16% of it), and a
+ * height set by hand is stored as a device preference. Either way the current
+ * viewport caps it, so a size picked on a tablet can never swallow a phone.
+ */
 const HEIGHT_STORE = "xecutr:composer-height";
 const MIN_HEIGHT = 76;
-const DEFAULT_HEIGHT = 120;
-
-const storedHeight = () => {
-  if (typeof window === "undefined") return DEFAULT_HEIGHT;
-  const value = Number(window.localStorage.getItem(HEIGHT_STORE));
-  return Number.isFinite(value) && value >= MIN_HEIGHT ? value : DEFAULT_HEIGHT;
-};
+const SCREEN_SHARE = 0.16;
+const MAX_SHARE = 0.45;
 
 /**
  * The prompt window: a resizable textarea, the plan/build toggle and send.
  *
- * Drag the little handle above the text to size it (double-click the handle to
- * reset). The height is saved in local storage for this device, so the reply
- * area stays the size you set instead of being adjusted on every visit.
+ * Drag the little handle above the text to size it (double-click to reset and
+ * let the screen decide again). The control row wraps onto a new line on narrow
+ * screens rather than pushing buttons off the edge.
  */
 export default function Composer({
   value,
@@ -36,15 +35,32 @@ export default function Composer({
   onModeChange,
 }) {
   const canSend = value.trim().length > 0 && !busy;
-  const [height, setHeight] = useState(DEFAULT_HEIGHT);
+  const [viewport, setViewport] = useState(800);
+  const [custom, setCustom] = useState(0); // 0 = follow the screen
   const drag = useRef(null);
 
   useEffect(() => {
-    setHeight(storedHeight());
+    const read = () => {
+      setViewport(window.innerHeight || 800);
+      const stored = Number(window.localStorage.getItem(HEIGHT_STORE));
+      if (Number.isFinite(stored) && stored > 0) setCustom(stored);
+    };
+    read();
+    window.addEventListener("resize", read);
+    window.addEventListener("orientationchange", read);
+    return () => {
+      window.removeEventListener("resize", read);
+      window.removeEventListener("orientationchange", read);
+    };
   }, []);
 
+  const maxHeight = Math.max(MIN_HEIGHT, Math.round(viewport * MAX_SHARE));
+  const height = Math.round(
+    Math.min(maxHeight, Math.max(MIN_HEIGHT, custom > 0 ? custom : viewport * SCREEN_SHARE)),
+  );
+
   const remember = (next) => {
-    setHeight(next);
+    setCustom(next);
     try {
       window.localStorage.setItem(HEIGHT_STORE, String(next));
     } catch {
@@ -60,9 +76,8 @@ export default function Composer({
 
   const onDrag = (event) => {
     if (!drag.current) return;
-    const max = Math.round((window.innerHeight || 800) * 0.45);
-    const next = Math.min(max, Math.max(MIN_HEIGHT, drag.current.height - (event.clientY - drag.current.y)));
-    setHeight(next);
+    const next = Math.min(maxHeight, Math.max(MIN_HEIGHT, drag.current.height - (event.clientY - drag.current.y)));
+    setCustom(next);
   };
 
   const endDrag = () => {
@@ -83,7 +98,7 @@ export default function Composer({
         role="separator"
         aria-label="Resize the prompt window"
         aria-orientation="horizontal"
-        title="Drag to resize · double-click to reset"
+        title="Drag to resize · double-click to follow the screen"
         onPointerDown={startDrag}
         onPointerMove={onDrag}
         onPointerUp={endDrag}
@@ -94,7 +109,7 @@ export default function Composer({
           } catch {
             /* storage unavailable */
           }
-          setHeight(DEFAULT_HEIGHT);
+          setCustom(0);
         }}
         className="group flex h-3 w-full cursor-row-resize touch-none items-center justify-center"
       >
@@ -112,9 +127,11 @@ export default function Composer({
         placeholder={placeholder}
         className="w-full resize-none overflow-auto bg-transparent px-4 pb-3 pt-1 font-body text-[14px] leading-relaxed text-[#eef3f8] outline-none placeholder:text-[#7e8b99]"
       />
-      <div className="flex flex-wrap items-center justify-between gap-2 gap-y-2.5 border-t border-white/10 px-3 py-2.5">
-        <div className="min-w-0 flex-1 truncate">{footer}</div>
-        <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
+
+      <div className="border-t border-white/10 px-3 py-2.5 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+        {footer && <div className="min-w-0 pb-2 sm:flex-1 sm:pb-0">{footer}</div>}
+
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {onModeChange && (
             <div className="inline-flex items-center overflow-hidden rounded-sm border border-white/10">
               {MODES.map(({ id, label, icon: Icon, title }) => {
@@ -138,6 +155,7 @@ export default function Composer({
               })}
             </div>
           )}
+
           {busy ? (
             <button
               type="button"

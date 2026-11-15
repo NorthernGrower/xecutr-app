@@ -119,7 +119,7 @@ function ProjectWorkspace() {
   }
 
   return (
-    <div className="flex h-[100dvh] flex-col bg-background">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-background">
       <WorkspaceHeader providerLabel={headerLabel} />
 
       <div className="mx-auto flex min-h-0 w-full max-w-[1500px] flex-1 gap-0 px-0 sm:px-3">
@@ -170,7 +170,7 @@ function ProjectWorkspace() {
               {files.length} files
             </span>
 
-            <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
+            <div className="ml-auto flex w-full flex-wrap items-center justify-start gap-1 sm:w-auto sm:justify-end">
               <GitHubRepoButton project={project} onSaved={reload} />
               <DeleteProjectButton
                 project={project}
