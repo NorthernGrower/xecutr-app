@@ -1,11 +1,12 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Activity, Cpu, Shield, Users } from "lucide-react";
+import { Activity, Check, Copy, Cpu, Rocket, Shield, Users } from "lucide-react";
 import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
 import Panel from "@/components/workspace/Panel";
 import { authQuery } from "@/lib/AuthContext";
 import { adminTrialUsage } from "@/lib/admin";
 import { BUILD } from "@/lib/build";
+import { PUBLISH } from "@/lib/publish";
 import { xecutrHealth } from "@/lib/chat";
 
 export const Route = createFileRoute("/_authed/admin")({
@@ -36,6 +37,7 @@ function AdminPage() {
   const [health, setHealth] = useState(null);
   const [usage, setUsage] = useState(null);
   const [usageError, setUsageError] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     xecutrHealth().then(setHealth).catch(() => setHealth({ ok: false }));
@@ -43,6 +45,16 @@ function AdminPage() {
       .then(setUsage)
       .catch((err) => setUsageError(err?.message || "Could not load usage."));
   }, []);
+
+  const copyCommand = async () => {
+    try {
+      await navigator.clipboard.writeText(PUBLISH.command);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard blocked — the command is on screen to select by hand */
+    }
+  };
 
   return (
     <div className="min-h-[100dvh] bg-background">
@@ -66,14 +78,58 @@ function AdminPage() {
                 <span className="text-muted-foreground">Platform role:</span>{" "}
                 <span className="font-mono text-[12px] uppercase text-[#e0f7ff]">{user?.role}</span>
               </p>
-              <p className="font-body text-[13px]">
-                <span className="text-muted-foreground">App build:</span>{" "}
-                <span className="font-mono text-[12px] uppercase text-[#e0f7ff]">{BUILD}</span>
-              </p>
               <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
                 Roles are managed in the Base44 builder's Members area — whoever is marked
                 "admin" there sees this page.
               </p>
+            </div>
+          </Card>
+
+          <Card icon={Rocket} title="live base44 site">
+            <div className="space-y-3 font-body text-[13px] leading-relaxed text-[#eef3f8]">
+              <p className="text-muted-foreground">{PUBLISH.intro}</p>
+
+              <ol className="list-decimal space-y-1.5 pl-5">
+                {PUBLISH.steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+
+              <div>
+                <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+                  {PUBLISH.commandNote}
+                </p>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <code className="min-w-0 flex-1 truncate rounded-sm border border-white/10 bg-black/40 px-2 py-1.5 font-mono text-[11px] text-[#dfe6ee]">
+                    {PUBLISH.command}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={copyCommand}
+                    className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-[#e0f7ff]/30 bg-[#e0f7ff]/[0.05] px-2.5 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-[#e0f7ff] transition hover:bg-[#e0f7ff]/[0.14]"
+                  >
+                    {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                    {copied ? "copied" : "copy"}
+                  </button>
+                </div>
+              </div>
+
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de]">
+                app build · {BUILD}
+              </p>
+
+              <div>
+                <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+                  once it has caught up
+                </p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-[12.5px]">
+                  {PUBLISH.after.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <p className="text-[12px] leading-relaxed text-muted-foreground">{PUBLISH.vpsNote}</p>
             </div>
           </Card>
 
