@@ -4,14 +4,23 @@ const FENCE = /```([^\n]*)\n([\s\S]*?)```/g;
 const MEDIA_MARK = /\[\[\s*(image|video|music)\s*:\s*([^\]]{3,900})\]\]/gi;
 
 /**
- * Pull `[[image: …]]` / `[[video: …]]` markers out of a reply. What is left is
- * what the user reads; each marker becomes one generation request.
+ * The system prompt's own examples come back verbatim from a lazy model (most
+ * often inside a plan), so a marker filled with the template is not a request.
+ */
+const PLACEHOLDERS = new Set([
+  "a vivid one-sentence description",
+  "genre, instruments, tempo and mood",
+]);
+
+/**
+ * Pull `[[image: …]]` / `[[video: …]]` / `[[music: …]]` markers out of a reply.
+ * What is left is what the user reads; each marker becomes one request.
  */
 export function splitMedia(text = "") {
   const requests = [];
   const rest = text.replace(MEDIA_MARK, (_whole, kind, prompt) => {
     const clean = prompt.replace(/\s+/g, " ").trim();
-    if (clean) requests.push({ kind: kind.toLowerCase(), prompt: clean });
+    if (clean && !PLACEHOLDERS.has(clean.toLowerCase())) requests.push({ kind: kind.toLowerCase(), prompt: clean });
     return "";
   });
   return { text: rest.replace(/\n{3,}/g, "\n\n").trim(), requests };

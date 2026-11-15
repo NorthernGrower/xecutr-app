@@ -68,7 +68,10 @@ export default function useXecutrChat({ initialMessages = [], onFiles, onMedia, 
       );
 
       if (result?.files?.length) live.current.onFiles?.(result.files);
-      if (requests.length) live.current.onMedia?.(requests, assistantId);
+      // A plan turn generates nothing: the model may still mark media, so the
+      // guard lives here rather than trusting the reply.
+      const wanted = mode === "plan" ? [] : requests;
+      if (wanted.length) live.current.onMedia?.(wanted, assistantId);
 
       if (reply) {
         live.current.onFinish?.({
