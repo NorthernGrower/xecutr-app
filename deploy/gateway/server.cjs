@@ -37,6 +37,7 @@ const https = require('node:https');
 const fs = require('node:fs');
 const path = require('node:path');
 const providers = require('./providers.cjs');
+const { createTelegram } = require('./telegram.cjs');
 
 const PORT = Number(process.env.PORT || '8080');
 const OLLAMA = (process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434/v1').replace(/\/+$/, '');
@@ -48,6 +49,108 @@ const MEDIA = new URL(process.env.MEDIA_URL || 'http://127.0.0.1:8090');
 
 /** Turns currently generating, by the id the app sent, so they can be paused. */
 const ACTIVE = new Map();
+
+/* --------------------------------------------------------------------------
+ * Channels: Telegram and voice (Siri), without a browser in the middle.
+ *
+ * Both run a turn through the same provider chain as the web app. They skip
+ * Base44 entirely, so they work even when the app's session is the thing that
+ * is broken; the trade is that they do not write into a project's files.
+ * ------------------------------------------------------------------------ */
+
+const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const TELEGRAM_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || '';
+const TELEGRAM_CHATS = (process.env.TELEGRAM_ALLOWED_CHATS || '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
+const APP_URL = (process.env.APP_URL || 'https://xecutr.cloud').replace(/\/+$/, '');
+
+const CHANNEL_SYSTEM =
+  'You are Xecutr, a coding and building assistant answering over a chat app. ' +
+  'Be brief and concrete: a few short paragraphs at most, plain text, no tables. ' +
+  'If a task needs code, show only the essential lines. The person cannot see the ' +
+  'web app from here, so never claim to have opened or changed a file unless the ' +
+  'conversation shows it.';
+
+/** One complete answer, through the chain, for a channel that has no stream. */
+const bridgeTurn = async ({ messages, hasImages }) =>
+  providers.completeTurn({
+    messages,
+    system: CHANNEL_SYSTEM,
+    hasImages,
+    clientKeys: {},
+  });
+
+const telegram = createTelegram({
+  token: TELEGRAM_TOKEN,
+  allowedChats: TELEGRAM_CHATS,
+  runTurn: bridgeTurn,
+  log: (line) => console.log(line),
+});
+
+/** Telegram delivers an update here; answer 200 fast, then work. */
+const telegramWebhook = async (pathname, req, res) => {
+  const secret = pathname.split('/').pop();
+  if (!TELEGRAM_TOKEN || !TELEGRAM_SECRET) {
+    res.writeHead(503, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'Telegram is not configured on this gateway.' }));
+    return;
+  }
+  if (secret !== TELEGRAM_SECRET) {
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false }));
+    return;
+  }
+
+  const raw = await readBody(req);
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ ok: true }));
+
+  try {
+    telegram.handleUpdate(JSON.parse(raw.toString('utf8') || '{}'));
+  } catch {
+    /* a malformed update is not worth a second request from Telegram */
+  }
+};
+
+/** Siri Shortcuts (or anything else) speaks a line and hears the answer. */
+const voiceTurn = async (pathname, req, res) => {
+  const secret = pathname.split('/').pop();
+  if (!TELEGRAM_SECRET || secret !== TELEGRAM_SECRET) {
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'Bad or missing secret.' }));
+    return;
+  }
+
+  let text = '';
+  try {
+    text = String(JSON.parse((await readBody(req)).toString('utf8') || '{}').text || '').slice(0, 8000);
+  } catch {
+    text = '';
+  }
+  if (!text.trim()) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'Send {"text": "..."}.' }));
+    return;
+  }
+
+  try {
+    const answer = await bridgeTurn({ messages: [{ role: 'user', text }], hasImages: false });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        ok: true,
+        reply: answer.text,
+        provider: answer.providerName,
+        model: answer.modelLabel,
+      }),
+    );
+  } catch (err) {
+    res.writeHead(502, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, reply: `The harness could not answer: ${err?.message || err}` }));
+  }
+};
 
 const BASE44_PREFIXES = [
   '/api/apps/',
@@ -527,6 +630,20 @@ const server = http.createServer((req, res) => {
     upload(req, res);
   } else if (pathname === '/api/chat/abort' && req.method === 'POST') {
     abortTurn(req, res);
+  } else if (pathname === '/api/telegram' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        ok: true,
+        configured: Boolean(TELEGRAM_TOKEN && TELEGRAM_SECRET),
+        chats: TELEGRAM_CHATS.length,
+        app: APP_URL,
+      }),
+    );
+  } else if (pathname.startsWith('/api/telegram/') && req.method === 'POST') {
+    telegramWebhook(pathname, req, res);
+  } else if (pathname.startsWith('/api/voice/') && req.method === 'POST') {
+    voiceTurn(pathname, req, res);
   } else if (pathname === '/api/chat' && req.method === 'POST') {
     chatTurn(req, res);
   } else if (pathname.startsWith('/api/media/') || pathname.startsWith('/media/')) {

@@ -802,6 +802,49 @@ async function* streamText(route, { messages, system, signal }) {
   }
 }
 
+/* ------------------------------------------------------- one-shot answers */
+
+const REFUSAL_TEXT =
+  /(I (?:can't|cannot|won't|am unable)|I'm (?:sorry|unable|not able)|as an AI|I must decline|cannot assist)/i;
+
+/**
+ * One turn without a stream — for channels that just want the answer (Telegram,
+ * voice). It walks the same candidate chain, lets a refusal fall through to the
+ * next model, and ends on this server, so a refusal still gets an answer.
+ */
+async function completeTurn({ messages, system, hasImages = false, providerId, model, clientKeys }) {
+  const catalogue = await catalog(clientKeys || {});
+  const routes = candidates({ providerId, model, clientKeys: clientKeys || {}, catalogue, hasImages });
+  if (!routes.length) throw new Error('No model is connected yet.');
+
+  let lastError = '';
+  for (const route of routes) {
+    try {
+      let text = '';
+      for await (const delta of streamText(route, { messages, system })) text += delta;
+      const clean = text.trim();
+      if (!clean) {
+        lastError = `${route.name} returned nothing.`;
+        continue;
+      }
+      if (clean.length < 600 && REFUSAL_TEXT.test(clean)) {
+        lastError = `${route.name} refused.`;
+        continue;
+      }
+      return {
+        text: clean,
+        providerName: route.name,
+        modelLabel: route.modelLabel,
+        escalated: Boolean(route.escalated),
+      };
+    } catch (err) {
+      lastError = err?.message || String(err);
+    }
+  }
+
+  throw new Error(lastError || 'No connected model could answer.');
+}
+
 module.exports = {
   PROVIDERS,
   MODEL_ID_PATTERN,
@@ -812,4 +855,5 @@ module.exports = {
   scoreModel,
   streamText,
   discover,
+  completeTurn,
 };
