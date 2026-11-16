@@ -120,6 +120,7 @@ export const HELP = [
       "Message the bot: text, photos, /reset to forget the chat, /preview <project id> for a link.",
       "It answers through the same chain as the app; a refusal still lands on the local model.",
       "It answers as the harness, it does not edit project files.",
+      "Once it is set up, /profile has an “open bot” button that opens the bot in Telegram.",
     ],
   },
   {
@@ -130,6 +131,7 @@ export const HELP = [
       "Shortcut: Dictate Text → Get Contents of URL (POST https://xecutr.cloud/api/voice/<secret>, JSON body text) → dictionary value “reply” → Speak Text.",
       "Name it “Ask Xecutr”, then say “Hey Siri, Ask Xecutr”.",
       "The secret is the same webhook secret used for Telegram.",
+      "On an iPhone or iPad, /profile has an “open in siri” button that runs the shortcut.",
     ],
   },
   {

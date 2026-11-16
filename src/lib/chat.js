@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/auth-middleware";
 import { providerById } from "@/lib/providers";
 import { buildTurn, readTurn } from "@/lib/gateway.server";
 import { saveTurn } from "@/lib/turn-save.server";
-import { fetchHealth, fetchProviders, forwardableKeys, postAbort, postChat, postUpload } from "@/lib/xecutr.server";
+import { fetchChannels, fetchHealth, fetchProviders, forwardableKeys, postAbort, postChat, postUpload } from "@/lib/xecutr.server";
 
 const MAX_TURN_CHARS = 60000;
 const MAX_ARTIFACT_BYTES = 8 * 1024 * 1024;
@@ -69,6 +69,12 @@ export const xecutrCatalog = createServerFn({ method: "POST" })
 
 /** Model server liveness (GET /api/health). */
 export const xecutrHealth = createServerFn({ method: "GET" }).handler(() => fetchHealth());
+
+/**
+ * Telegram and Siri (GET /api/telegram): set up or not, and the bot to link to.
+ * Read at the profile page so the buttons reflect the gateway, not a guess.
+ */
+export const xecutrChannels = createServerFn({ method: "GET" }).handler(() => fetchChannels());
 
 /** Stop a turn in flight: the gateway aborts the model's stream. */
 export const abortTurn = createServerFn({ method: "POST" })

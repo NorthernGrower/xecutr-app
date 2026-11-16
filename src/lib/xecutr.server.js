@@ -156,6 +156,29 @@ export async function fetchHealth() {
   }
 }
 
+/**
+ * GET /api/telegram — whether the Telegram bot and the Siri voice endpoint are
+ * set up on the gateway, and the bot's own name so the app can link to it.
+ * Nothing here is secret: a bot's username is public and the webhook secret
+ * never leaves the server.
+ */
+export async function fetchChannels() {
+  try {
+    const res = await fetch(`${apiBase()}/api/telegram`, { headers: headers() });
+    if (!res.ok) return { configured: false, bot: "", link: "", error: refusal(res.status) };
+    const body = await res.json().catch(() => null);
+    return {
+      configured: Boolean(body?.configured),
+      chats: Number(body?.chats || 0),
+      bot: typeof body?.bot === "string" ? body.bot : "",
+      link: typeof body?.link === "string" ? body.link : "",
+      app: typeof body?.app === "string" ? body.app : "",
+    };
+  } catch (err) {
+    return { configured: false, bot: "", link: "", error: String(err?.message || err) };
+  }
+}
+
 /** GET /api/media/health — which generation models the server has loaded. */
 export async function fetchMediaHealth() {
   try {

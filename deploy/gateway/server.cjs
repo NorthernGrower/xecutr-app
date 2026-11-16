@@ -114,6 +114,27 @@ const telegramWebhook = async (pathname, req, res) => {
   }
 };
 
+/**
+ * Is Telegram (and the Siri voice endpoint beside it) set up, and what is the
+ * bot called? The app's profile page turns this into "open Telegram" and "open
+ * in Siri" buttons, so the bot's own name has to come from Telegram, not from a
+ * guess in the UI.
+ */
+const telegramStatus = async (res) => {
+  const me = await telegram.whoAmI().catch(() => null);
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(
+    JSON.stringify({
+      ok: true,
+      configured: Boolean(TELEGRAM_TOKEN && TELEGRAM_SECRET),
+      chats: TELEGRAM_CHATS.length,
+      app: APP_URL,
+      bot: me?.username || '',
+      link: me?.link || '',
+    }),
+  );
+};
+
 /** Siri Shortcuts (or anything else) speaks a line and hears the answer. */
 const voiceTurn = async (pathname, req, res) => {
   const secret = pathname.split('/').pop();
@@ -659,15 +680,7 @@ const server = http.createServer((req, res) => {
   } else if (pathname === '/api/chat/abort' && req.method === 'POST') {
     abortTurn(req, res);
   } else if (pathname === '/api/telegram' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(
-      JSON.stringify({
-        ok: true,
-        configured: Boolean(TELEGRAM_TOKEN && TELEGRAM_SECRET),
-        chats: TELEGRAM_CHATS.length,
-        app: APP_URL,
-      }),
-    );
+    telegramStatus(res);
   } else if (pathname.startsWith('/api/telegram/') && req.method === 'POST') {
     telegramWebhook(pathname, req, res);
   } else if (pathname.startsWith('/api/voice/') && req.method === 'POST') {

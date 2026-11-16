@@ -32,6 +32,7 @@ function chunk(text, limit = MAX_TELEGRAM_CHARS) {
 
 function createTelegram({ token, allowedChats = [], runTurn, log = console.log }) {
   const history = new Map();
+  let me = { at: 0, value: null };
 
   const configured = Boolean(token);
 
@@ -168,7 +169,30 @@ function createTelegram({ token, allowedChats = [], runTurn, log = console.log }
     }
   };
 
-  return { configured, handleUpdate, send };
+  /**
+   * Who the bot is, so the app can offer a t.me link. Asked once and kept for
+   * ten minutes: the username changes only if the owner renames the bot.
+   */
+  const whoAmI = async () => {
+    if (!configured) return null;
+    if (me.value && Date.now() - me.at < 10 * 60 * 1000) return me.value;
+    try {
+      const data = await call('getMe', {});
+      const username = data?.result?.username || '';
+      me = {
+        at: Date.now(),
+        value: username
+          ? { username, name: data.result.first_name || '', link: `https://t.me/${username}` }
+          : null,
+      };
+      return me.value;
+    } catch {
+      me = { at: Date.now(), value: null };
+      return null;
+    }
+  };
+
+  return { configured, handleUpdate, send, whoAmI };
 }
 
 module.exports = { createTelegram, chunk };
