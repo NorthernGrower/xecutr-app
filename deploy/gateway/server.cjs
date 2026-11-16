@@ -280,10 +280,13 @@ const HEDGE_CHARS = 900;
  * the held-back text.
  */
 const REFUSAL =
-  /(I (?:can't|cannot|won't|am unable)|I'm (?:sorry|unable|not able)|as an AI|I must (?:decline|refuse)|cannot assist|can't assist|can't help|cannot help|can't create|cannot create|can't build|cannot build|can't provide|cannot provide|unable to comply|not able to help|against (?:my|our) (?:policy|guidelines))/i;
+  /(I (?:can't|cannot|won't|am unable)|I'm (?:sorry|unable|not able)|I am (?:sorry|unable)|sorry,? but I (?:can't|cannot|won't)|as an AI|I must (?:decline|refuse)|cannot assist|can't assist|can't help|cannot help|can't create|cannot create|can't build|cannot build|can't provide|cannot provide|unable to comply|not able to help|against (?:my|our) (?:policy|guidelines))/i;
+
+/** Models write ’ as often as ', so a refusal must match either. */
+const straightApostrophes = (text) => text.replace(/[\u2018\u2019\u201a\u201b\u02bc]/g, "'");
 
 const looksLikeRefusal = (text) => {
-  const trimmed = text.trim();
+  const trimmed = straightApostrophes(String(text || '')).trim();
   if (!trimmed) return false;
   // A long answer that mentions a limit mid-way is still an answer; a short or
   // medium one that declines is a refusal.
