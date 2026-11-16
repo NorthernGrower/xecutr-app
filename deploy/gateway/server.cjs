@@ -223,6 +223,20 @@ const systemPrompt = (body, uploadNotes) => {
         body.tasks.map((t) => `- [${t.status}] ${t.title}${t.note ? ` (${t.note})` : ''}`).join('\n'),
     );
   }
+  // The file protocol is explained on every project turn, not only when the
+  // project already has files: a new project starts empty, and a model that is
+  // never told the format answers in prose — the project would stay empty
+  // forever, which is exactly what happened to the first two projects.
+  parts.push(
+    'The project is a set of real files. When the user asks you to build, create, download, ' +
+      'port or change anything, reply with each file COMPLETE, in its own fenced block whose ' +
+      'header is exactly `file path="the/path"` — the app saves it as that file. For example:\n' +
+      '```file path="index.html"\n<!doctype html>\n<html><body><h1>Hello</h1></body></html>\n```\n' +
+      'One block per file, each one the whole file (never a diff, never "the rest of the file"), ' +
+      'with paths relative to the project root. Put short prose before the blocks, never inside ' +
+      'them, and do not describe the files you are about to write — write them. If the turn is ' +
+      'only a question, answer it and write no blocks.',
+  );
   if (body.files?.length) {
     let budget = 120000;
     const blocks = [];
@@ -235,9 +249,8 @@ const systemPrompt = (body, uploadNotes) => {
     }
     if (blocks.length) {
       parts.push(
-        'These are the project files. When the user asks you to create or change a file, ' +
-          'reply with the COMPLETE new file in a fenced block whose header is exactly ' +
-          '`file path="the/path"` — the app saves it as the file:\n' +
+        'These are the project files as they stand. Change one by replying with the complete ' +
+          'new version in a block of the same shape:\n' +
           blocks.join('\n'),
       );
     }
@@ -286,6 +299,32 @@ const MEDIA_REMINDER =
 const withMediaReminder = (text) => {
   if (!MEDIA_INTENT.test(text) || text.includes('[MODE: PLAN ONLY]')) return text;
   return `${text}${MEDIA_REMINDER}`;
+};
+
+/** A word that asks for work on the project's files, not for an answer. */
+const BUILD_INTENT =
+  /\b(build|create|make|write|implement|scaffold|generate|add|fix|refactor|rewrite|change|update|design|code|develop|port|download|clone|import|recreate|replicate)\b/i;
+
+/** Words that mean the work is about the project itself, not just a picture. */
+const PROJECT_WORD =
+  /\b(page|pages|app|site|website|file|files|code|project|html|css|js|ts|jsx|tsx|react|component|components|api|backend|frontend|repo|repository|website|screen|screens)\b/i;
+
+/**
+ * Small models answer "I will build that for you" and stop. The file rule lives
+ * far away in a long system prompt, so it is repeated next to the question that
+ * asked for work, and it names the mistake explicitly — the same trick that made
+ * the media markers reliable on the 7B.
+ */
+const FILE_REMINDER =
+  '\n\n[FILE TOOL] This turn asks for work in the project. Write the files: each one complete, ' +
+  'in its own fenced block with the header exactly `file path="path/from/project/root"`. ' +
+  'Never a diff, never an excerpt, never "I will create…" — prose first, then the blocks.';
+
+const withFileReminder = (text) => {
+  if (text.includes('[MODE: PLAN ONLY]') || !BUILD_INTENT.test(text)) return text;
+  // "make me a logo" is a media request, not a file request.
+  if (MEDIA_INTENT.test(text) && !PROJECT_WORD.test(text)) return text;
+  return `${text}${FILE_REMINDER}`;
 };
 
 /** Words that mean the turn is worth a stronger model than the fast default. */
@@ -414,6 +453,10 @@ const chatTurn = async (req, res) => {
     .slice(0, 3);
   if (images.length && lastUser) lastUser.images = images;
 
+  // The file rule rides with the turn that asks for work, so a small model does
+  // not answer a build request with a description of the build. It goes first:
+  // a media marker, when there is one, stays the last line the model reads.
+  if (lastUser) lastUser.text = withFileReminder(lastUser.text);
   // The media reminder is for "make me an image"; someone who pasted one is
   // asking about that picture, not ordering a new one.
   if (lastUser && !images.length) lastUser.text = withMediaReminder(lastUser.text);
