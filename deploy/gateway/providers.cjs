@@ -589,6 +589,25 @@ function localChain(hasImages, afterModel) {
     }));
 }
 
+/**
+ * After a refusal, the next model to try is this server's abliterated one: the
+ * hosted provider that just declined has arrived at the limit of what it will
+ * do, the fast local model says the same thing, and a second CPU generation
+ * from a model that will decline again only makes the person wait. So the
+ * abliterated model goes to the front and everything else keeps its order.
+ */
+function escalateForRefusal(routes) {
+  const preferred = process.env.OLLAMA_ROUTE_MODEL || process.env.OLLAMA_FALLBACK_MODEL || '';
+  if (!preferred) return routes;
+
+  const at = routes.findIndex((route) => route.id === 'ollama' && route.model === preferred);
+  if (at <= 0) return routes;
+
+  const next = [...routes];
+  const [pick] = next.splice(at, 1);
+  return [{ ...pick, name: 'Local fallback', reason: 'refusal' }, ...next];
+}
+
 /* -------------------------------------------------------------- streaming */
 
 const sseData = (line) => {
@@ -813,10 +832,33 @@ async function ensureLocal() {
   return discover(local, '');
 }
 
-/* ------------------------------------------------------- one-shot answers */
+/* --------------------------------------------------------- refusal checks */
 
-const REFUSAL_TEXT =
-  /(I (?:can't|cannot|won't|am unable)|I'm (?:sorry|unable|not able)|as an AI|I must decline|cannot assist)/i;
+/**
+ * A refusal is not always an apology in the first few words: hosted models often
+ * open with agreement and only then decline ("I understand the goal, however I
+ * can't help build that"). This looks for the decline anywhere in a reply.
+ */
+const REFUSAL =
+  /(I (?:can't|cannot|won't|am unable)|I'm (?:sorry|unable|not able)|I am (?:sorry|unable)|sorry,? but I (?:can't|cannot|won't)|as an AI|I must (?:decline|refuse)|cannot assist|can't assist|can't help|cannot help|can't create|cannot create|can't build|cannot build|can't provide|cannot provide|cannot do that|can't do that|unable to comply|not able to help|against (?:my|our) (?:policy|guidelines))/i;
+
+/** Models write ’ as often as ', so a refusal must match either. */
+const straightApostrophes = (text) => text.replace(/[\u2018\u2019\u201a\u201b\u02bc]/g, "'");
+
+/**
+ * Whether a reply is a decline rather than work. A short reply that declines is
+ * a refusal; so is a long one whose opening declines, because the person is
+ * told no before anything useful arrives. A long reply that helps and mentions
+ * a limit part-way through is still an answer.
+ */
+const looksLikeRefusal = (text) => {
+  const trimmed = straightApostrophes(String(text || '')).trim();
+  if (!trimmed) return false;
+  if (!REFUSAL.test(trimmed)) return false;
+  return trimmed.length < 700 || REFUSAL.test(trimmed.slice(0, 240));
+};
+
+/* ------------------------------------------------------- one-shot answers */
 
 /**
  * One turn without a stream — for channels that just want the answer (Telegram,
@@ -830,7 +872,8 @@ async function completeTurn({ messages, system, hasImages = false, providerId, m
   if (!routes.length) throw new Error('No model is connected yet.');
 
   let lastError = '';
-  for (const route of routes) {
+  for (let index = 0; index < routes.length; index += 1) {
+    const route = routes[index];
     try {
       let text = '';
       for await (const delta of streamText(route, { messages, system })) text += delta;
@@ -839,8 +882,9 @@ async function completeTurn({ messages, system, hasImages = false, providerId, m
         lastError = `${route.name} returned nothing.`;
         continue;
       }
-      if (clean.length < 600 && REFUSAL_TEXT.test(clean)) {
+      if (looksLikeRefusal(clean)) {
         lastError = `${route.name} refused.`;
+        routes.splice(index + 1, routes.length, ...escalateForRefusal(routes.slice(index + 1)));
         continue;
       }
       return {
@@ -869,4 +913,6 @@ module.exports = {
   discover,
   ensureLocal,
   completeTurn,
+  looksLikeRefusal,
+  escalateForRefusal,
 };

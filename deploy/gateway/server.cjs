@@ -270,31 +270,20 @@ const withMediaReminder = (text) => {
 /** Words that mean the turn is worth a stronger model than the fast default. */
 const HEAVY_TASK =
   /(architect|design|refactor|review|audit|security|optimi[sz]e|migrat|multi-?\s?file|whole project|end to end|debug|explain (why|how))/i;
-/** How much of a reply is held back before it is trusted not to be a refusal. */
+/** How much of a hosted reply is held back before it is trusted not to be a refusal. */
 const HEDGE_CHARS = 900;
-
 /**
- * A refusal is not always an apology in the first few words: hosted models often
- * open with agreement and only then decline ("I understand the goal, however I
- * can't help build a client that ..."). This looks for the decline anywhere in
- * the held-back text.
+ * This server's models need a much smaller hold: a local refusal opens with the
+ * decline ("I'm sorry, but I can't assist with that."), and holding a long reply
+ * back on a CPU-only box would stall the first token for a minute or more.
  */
-const REFUSAL =
-  /(I (?:can't|cannot|won't|am unable)|I'm (?:sorry|unable|not able)|I am (?:sorry|unable)|sorry,? but I (?:can't|cannot|won't)|as an AI|I must (?:decline|refuse)|cannot assist|can't assist|can't help|cannot help|can't create|cannot create|can't build|cannot build|can't provide|cannot provide|unable to comply|not able to help|against (?:my|our) (?:policy|guidelines))/i;
+const LOCAL_HEDGE_CHARS = 160;
 
-/** Models write ’ as often as ', so a refusal must match either. */
-const straightApostrophes = (text) => text.replace(/[\u2018\u2019\u201a\u201b\u02bc]/g, "'");
-
-const looksLikeRefusal = (text) => {
-  const trimmed = straightApostrophes(String(text || '')).trim();
-  if (!trimmed) return false;
-  // A long answer that mentions a limit mid-way is still an answer; a short or
-  // medium one that declines is a refusal.
-  return trimmed.length < 1600 && REFUSAL.test(trimmed);
-};
+/** Refusal detection lives with the providers, so every channel agrees on it. */
+const looksLikeRefusal = (text) => providers.looksLikeRefusal(text);
 
 /**
- * One candidate's turn, streamed to the reader — the first HEDGE_CHARS are held
+ * One candidate's turn, streamed to the reader — `hedge` characters are held
  * back so a refusal can be re-run on another model before anything is shown,
  * and the reader never has to unsee it. Past the hedge, deltas go out as they
  * arrive. Provider details live in providers.cjs.
@@ -307,7 +296,7 @@ const runCandidate = async (route, { system, messages, res, hedge, signal }) => 
   let full = '';
   let pending = '';
   let emitted = 0;
-  let decided = !hedge;
+  let decided = !(hedge > 0);
 
   const write = (text) => {
     if (!text) return;
@@ -322,7 +311,7 @@ const runCandidate = async (route, { system, messages, res, hedge, signal }) => 
       return;
     }
     pending += delta;
-    if (pending.length < HEDGE_CHARS) return;
+    if (pending.length < hedge) return;
     if (looksLikeRefusal(full)) return; // keep holding: the caller may escalate
     decided = true;
     write(pending);
@@ -464,7 +453,9 @@ const chatTurn = async (req, res) => {
       system,
       messages: conversation,
       res,
-      hedge: index === 0,
+      // Every candidate holds its opening back, so a decline never reaches the
+      // reader; this server's models need only a short hold.
+      hedge: route.id === 'ollama' ? LOCAL_HEDGE_CHARS : HEDGE_CHARS,
       signal: abort.signal,
     });
 
@@ -475,6 +466,14 @@ const chatTurn = async (req, res) => {
     // A refusal or a failed turn is not an answer: the next candidate takes it.
     reason = answer.refusal ? 'refusal' : 'error';
     previous = route.modelLabel;
+
+    // A refusal is the abliterated model's job. It goes to the front of what is
+    // left, ahead of the fast local model that would decline the same way and
+    // of any provider likely to decline too, so a refused turn lands on the
+    // model that will actually do the work.
+    if (answer.refusal) {
+      routes.splice(index + 1, routes.length, ...providers.escalateForRefusal(routes.slice(index + 1)));
+    }
   }
 
   res.off('close', stopTurn);
@@ -492,6 +491,14 @@ const chatTurn = async (req, res) => {
       message:
         answer?.error ||
         'No connected model could answer this turn. Check the provider keys in Connections.',
+    });
+  } else if (answer.refusal) {
+    // Every model in the chain declined, and none of the text reached the
+    // reader: say so plainly rather than leave an empty answer behind.
+    sse(res, {
+      type: 'error',
+      message:
+        'Every connected model declined this turn. Add a provider key in Connections, or pull a model on this server.',
     });
   } else {
     // Tell the app about file blocks inline, so its tool path saves them too.
