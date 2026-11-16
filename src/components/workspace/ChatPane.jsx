@@ -69,6 +69,7 @@ export default function ChatPane({
   const [notice, setNotice] = useState(null);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [bannerClosed, setBannerClosed] = useState(false);
 
   // Gateway catalogue plus the shipped provider/models list, so every free
   // model (OVH included) is pickable even before the catalogue answers.
@@ -418,6 +419,12 @@ export default function ChatPane({
 
     const promptText = text || "Analyse the attached image and tell me what you see.";
 
+    // Sending a prompt that was deleted from the history brings it back there.
+    const promptKey = promptText.trim().toLowerCase();
+    if (hiddenPrompts.includes(promptKey)) {
+      rememberHidden(hiddenPrompts.filter((v) => v !== promptKey));
+    }
+
     if (!trial && projectId) {
       await base44.entities.Message.create({
         project_id: projectId,
@@ -475,8 +482,60 @@ export default function ChatPane({
     saveSettings(scope, next);
   };
 
-  // Every prompt sent in this project, newest first, straight from the saved turns.
+  /**
+   * Prompts deleted from the history are remembered on this device, per project,
+   * so a deleted prompt does not come back with the next reload. Sending the same
+   * prompt again brings it back, because it is clearly wanted again.
+   */
+  const hiddenKey = `xecutr:hidden-prompts:${scope}`;
+  const [hiddenPrompts, setHiddenPrompts] = useState([]);
+
+  useEffect(() => {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(hiddenKey) || "[]");
+      setHiddenPrompts(Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : []);
+    } catch {
+      setHiddenPrompts([]);
+    }
+  }, [hiddenKey]);
+
+  const rememberHidden = (list) => {
+    const next = list.slice(-200);
+    setHiddenPrompts(next);
+    try {
+      window.localStorage.setItem(hiddenKey, JSON.stringify(next));
+    } catch {
+      /* storage unavailable — the list still holds for this visit */
+    }
+  };
+
+  const hidePrompt = (text) => {
+    const key = text.trim().toLowerCase();
+    if (!key || hiddenPrompts.includes(key)) return;
+    rememberHidden([...hiddenPrompts, key]);
+  };
+
+  /** A past prompt that describes work still to do becomes a pinned task. */
+  const promptToTask = useCallback(async (text) => {
+    const pid = projectRef.current;
+    if (!pid) return false;
+    try {
+      await base44.entities.AgentTask.create({
+        project_id: pid,
+        title: text.replace(/\s+/g, " ").trim().slice(0, 160),
+        status: "queued",
+        kind: "build",
+      });
+      return true;
+    } catch {
+      setNotice("That prompt could not be saved as a task.");
+      return false;
+    }
+  }, []);
+
+  // Every prompt sent here, newest first, straight from the saved turns.
   const promptHistory = useMemo(() => {
+    const hidden = new Set(hiddenPrompts);
     const seen = new Set();
     const out = [];
     for (let i = messages.length - 1; i >= 0 && out.length < 20; i -= 1) {
@@ -485,10 +544,19 @@ export default function ChatPane({
       const text = textOfMessage(entry).trim();
       if (!text || seen.has(text)) continue;
       seen.add(text);
+      if (hidden.has(text.toLowerCase())) continue;
       out.push(text);
     }
     return out;
-  }, [messages]);
+  }, [messages, hiddenPrompts]);
+
+  // A new message opens the banner again, even after an earlier one was closed.
+  const bannerText =
+    notice || (typeof error === "string" ? error : error?.message) || "";
+
+  useEffect(() => {
+    setBannerClosed(false);
+  }, [bannerText]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -540,12 +608,21 @@ export default function ChatPane({
       </div>
 
       <div className="shrink-0 pb-1">
-        {(error || notice) && (
+        {bannerText && !bannerClosed && (
           <div className="mb-2 flex items-start gap-2 rounded-sm border border-red-500/30 bg-red-500/[0.07] px-3 py-2">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" />
-            <p className="font-body text-[12px] leading-relaxed text-red-300">
-              {notice || (typeof error === "string" ? error : error?.message) || "The gateway did not answer. Try again."}
+            <p className="min-w-0 flex-1 font-body text-[12px] leading-relaxed text-red-300">
+              {bannerText}
             </p>
+            <button
+              type="button"
+              onClick={() => setBannerClosed(true)}
+              title="Dismiss"
+              aria-label="Dismiss this message"
+              className="mt-0.5 shrink-0 rounded-sm text-red-400/70 transition hover:text-red-600"
+            >
+              <X className="h-3 w-3" strokeWidth={2.4} />
+            </button>
           </div>
         )}
 
@@ -623,7 +700,12 @@ export default function ChatPane({
                   <ImageIcon className="h-3 w-3" strokeWidth={1.6} />
                 </button>
               )}
-              <PromptHistory prompts={promptHistory} onPick={setPrompt} />
+              <PromptHistory
+                prompts={promptHistory}
+                onPick={setPrompt}
+                onDelete={hidePrompt}
+                onToTask={trial || !projectId ? undefined : promptToTask}
+              />
               <ModelPicker
                 providers={providers}
                 value={settings}
