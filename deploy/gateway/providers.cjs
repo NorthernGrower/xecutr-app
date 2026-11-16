@@ -802,6 +802,17 @@ async function* streamText(route, { messages, system, signal }) {
   }
 }
 
+/**
+ * Refresh this server's model list right before a turn. The local models are the
+ * refusal safety net, and a discovery call that happened to fail must never be
+ * the reason a refused turn has nowhere left to go.
+ */
+async function ensureLocal() {
+  const local = byId('ollama');
+  if (!local) return [];
+  return discover(local, '');
+}
+
 /* ------------------------------------------------------- one-shot answers */
 
 const REFUSAL_TEXT =
@@ -813,6 +824,7 @@ const REFUSAL_TEXT =
  * next model, and ends on this server, so a refusal still gets an answer.
  */
 async function completeTurn({ messages, system, hasImages = false, providerId, model, clientKeys }) {
+  await ensureLocal().catch(() => []);
   const catalogue = await catalog(clientKeys || {});
   const routes = candidates({ providerId, model, clientKeys: clientKeys || {}, catalogue, hasImages });
   if (!routes.length) throw new Error('No model is connected yet.');
@@ -855,5 +867,6 @@ module.exports = {
   scoreModel,
   streamText,
   discover,
+  ensureLocal,
   completeTurn,
 };

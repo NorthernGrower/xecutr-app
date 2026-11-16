@@ -271,15 +271,23 @@ const withMediaReminder = (text) => {
 const HEAVY_TASK =
   /(architect|design|refactor|review|audit|security|optimi[sz]e|migrat|multi-?\s?file|whole project|end to end|debug|explain (why|how))/i;
 /** How much of a reply is held back before it is trusted not to be a refusal. */
-const HEDGE_CHARS = 320;
+const HEDGE_CHARS = 900;
 
-/** A short, apologetic reply is a refusal — the cue to escalate. */
+/**
+ * A refusal is not always an apology in the first few words: hosted models often
+ * open with agreement and only then decline ("I understand the goal, however I
+ * can't help build a client that ..."). This looks for the decline anywhere in
+ * the held-back text.
+ */
 const REFUSAL =
-  /(I (?:can't|cannot|won't|am unable)|I'm (?:sorry|unable|not able)|as an AI|I must decline|cannot assist|can't help with)/i;
+  /(I (?:can't|cannot|won't|am unable)|I'm (?:sorry|unable|not able)|as an AI|I must (?:decline|refuse)|cannot assist|can't assist|can't help|cannot help|can't create|cannot create|can't build|cannot build|can't provide|cannot provide|unable to comply|not able to help|against (?:my|our) (?:policy|guidelines))/i;
 
 const looksLikeRefusal = (text) => {
   const trimmed = text.trim();
-  return trimmed.length > 0 && trimmed.length < 600 && REFUSAL.test(trimmed);
+  if (!trimmed) return false;
+  // A long answer that mentions a limit mid-way is still an answer; a short or
+  // medium one that declines is a refusal.
+  return trimmed.length < 1600 && REFUSAL.test(trimmed);
 };
 
 /**
@@ -338,7 +346,12 @@ const runCandidate = async (route, { system, messages, res, hedge, signal }) => 
     if (!refusal) write(pending);
     return { ok: true, text: full, emitted, refusal };
   }
-  return { ok: true, text: full, emitted, refusal: false };
+
+  // Late refusal: the text passed the hedge before the decline appeared. If
+  // nothing reached the reader yet we can still escalate cleanly; if some text
+  // is already out, the callers treat it as an answer rather than a duplicate.
+  const refusedLate = looksLikeRefusal(full);
+  return { ok: true, text: full, emitted, refusal: emitted === 0 && refusedLate };
 };
 
 /** Everything the gateway needs to say before the model's first token. */
@@ -405,6 +418,10 @@ const chatTurn = async (req, res) => {
 
   // Only providers that can answer right now: their own keys on this server,
   // keys the caller supplied for this turn, and keyless gateways that reply.
+  // The local models are the safety net, so their list is refreshed first: a
+  // trouble-prone discovery should never be the reason a refusal has nowhere
+  // to go.
+  await providers.ensureLocal().catch(() => []);
   const catalogue = await providers.catalog(body.keys || {});
   const routes = providers.candidates({
     providerId: body.providerId,
@@ -449,10 +466,11 @@ const chatTurn = async (req, res) => {
     });
 
     if (answer.aborted) break;
-    if (answer.ok && !answer.refusal) break;
+    // An empty answer is not an answer: let the next candidate try.
+    if (answer.ok && !answer.refusal && answer.text.trim()) break;
 
     // A refusal or a failed turn is not an answer: the next candidate takes it.
-    reason = answer.ok ? 'refusal' : 'error';
+    reason = answer.refusal ? 'refusal' : 'error';
     previous = route.modelLabel;
   }
 
