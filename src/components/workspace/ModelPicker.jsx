@@ -16,7 +16,7 @@ export default function ModelPicker({ providers = [], value, onChange, onRefresh
   // Auto names the provider that will actually answer first, so the page never
   // reads "local first" while a hosted model is in front of it.
   const autoLabel = providers[0] ? `auto · ${providers[0].label} first` : "auto · fastest first";
-  const current = active ? `pinned · ${active.label} · ${modelLabel(active, value.model)}` : autoLabel;
+  const current = active ? `manual · ${active.label} · ${modelLabel(active, value.model)}` : autoLabel;
 
   const choose = (next) => {
     onChange(next);
@@ -79,13 +79,17 @@ export default function ModelPicker({ providers = [], value, onChange, onRefresh
                 auto · fastest first
               </span>
               <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-                {providers[0]
-                  ? `${providers[0].label} answers first, then down by speed; refused or rate-limited turns fall to this server`
-                  : "waiting for a provider to answer its model list"}
+                the default — pick any model below to use it for this project instead
               </span>
             </span>
             {!value.providerId && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#e0f7ff]" />}
           </button>
+
+          {active && (
+            <p className="border-b border-white/[0.06] px-3 py-2 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+              manual choice active — “use auto” above returns to the routing chain
+            </p>
+          )}
 
           {providers.length === 0 && (
             <p className="px-3 py-3 font-body text-[11.5px] leading-relaxed text-muted-foreground">

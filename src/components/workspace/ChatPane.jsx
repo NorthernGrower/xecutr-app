@@ -455,6 +455,21 @@ export default function ChatPane({
     }
   }, [scope]);
 
+  /**
+   * Auto is the default; a saved pick is only kept while it still exists. If the
+   * provider went away or its model was retired, fall back to auto instead of
+   * pinning a choice the gateway would silently ignore.
+   */
+  useEffect(() => {
+    if (!settings.providerId || !providers.length) return;
+    const provider = providers.find((p) => p.id === settings.providerId);
+    const stillThere =
+      provider && (!settings.model || provider.models.some((m) => m.id === settings.model));
+    if (stillThere) return;
+    setSettings({ providerId: "", model: "" });
+    saveSettings(scope, { providerId: "", model: "" });
+  }, [providers, scope, settings.providerId, settings.model]);
+
   const chooseModel = (next) => {
     setSettings(next);
     saveSettings(scope, next);
