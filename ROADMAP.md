@@ -40,11 +40,22 @@ visible to the person using the product.
 
 - [x] Gateway picks a model from the prompt when none is pinned (fast default
       vs. routed model for long or heavy turns).
-- [x] Refusal detection: a short apologetic reply is treated as a refusal.
+- [x] Refusal detection: a short reply (under 700 chars) that declines in its
+      opening (first 320) is a refusal, curly apostrophe or straight. Every
+      candidate holds its opening back — 900 chars for a hosted provider, 160 for
+      a local model — so a decline never reaches the reader before it is
+      replaced.
 - [x] Automatic escalation to the local **9B abliterated coder**
       (`huihui_ai/qwen3.5-abliterated:9b-OmniCoder`) — the biggest model this
       CPU answers in a usable time — with the fallback marked in the reply
       label. Files from the escalated answer land in the project like any other.
+      A refusal moves that model to the front of the remaining chain, ahead of
+      other hosted providers and of the 7B, which would decline the same way.
+- [x] **Local models answer without thinking first.** Ollama's native
+      `/api/chat` with `think: false`: the OpenAI-compatible endpoint cannot turn
+      thinking off, and OmniCoder otherwise spent minutes reasoning (2,400 tokens
+      on one test) and wrote nothing before the timeout. Local routes also get a
+      15-minute window instead of the hosted 2.
 - [x] **Shared-CPU discipline:** a closed reader aborts its upstream stream (a
       tab no longer leaves a model generating for minutes), and starting a media
       job asks Ollama to unload first so the track or clip gets the whole box.
@@ -59,17 +70,18 @@ visible to the person using the product.
       only prompt length.
 - [ ] **Cost and latency budget.** Each turn carries a budget; the router picks
       the cheapest model that fits, and escalates only when verification fails.
-- [ ] **Escalation ladder, not a single fallback.**
-      `pinned → routed → local 7B → local 9B abliterated (OmniCoder)`, each step
-      recorded with a reason (`refusal`, `timeout`, `test failure`, `context
-      overflow`). The 27B sits outside the ladder on purpose: at this CPU speed a
-      turn on it costs minutes, so it stays a manual pick and is never chosen
-      automatically.
+- [ ] **Escalation ladder, not a single fallback.** Today the chain is
+      `pinned or routed → up to three hosted providers by speed → local 7B →
+      local 9B abliterated`, and a refusal sends the 9B straight to the front of
+      what is left. Each step should also be recorded with a reason (`refusal`,
+      `timeout`, `test failure`, `context overflow`). The 27B sits outside the
+      ladder on purpose: at this CPU speed a turn on it costs minutes, so it
+      stays a manual pick and is never chosen automatically.
 - [ ] **Refusal corpus.** Store every refusal and escalation (prompt hash, model,
       reason) so routing improves from real traffic.
 - [x] **Routing strip on every reply.** Which model answered, why it was chosen
       (`pinned by you`, `long turn`, `many project files`, `heavy task`, `fast
-      default`), and the escalation trail (`qwen2.5-coder:7b → OmniCoder ·
+      default`), and the escalation trail (`gpt-oss-120b → OmniCoder ·
       escalated · refusal`). Stored with the message when the deployment's schema
       allows it, and shown live regardless.
 
