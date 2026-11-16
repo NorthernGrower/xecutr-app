@@ -155,7 +155,7 @@ function WorkspaceEntry() {
                     no key needed
                   </span>
                 </div>
-                <div className="h-[430px] px-4 pb-2">
+                <div className="h-[clamp(420px,62dvh,580px)] px-4 pb-2">
                   <ChatPane trial initialMessages={trialMessages} />
                 </div>
               </Panel>
