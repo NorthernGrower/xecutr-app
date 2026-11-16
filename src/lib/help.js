@@ -24,6 +24,8 @@ export const HELP = [
       "The workspace has chat on the left, files on the right, and a preview tab that renders the project.",
       "Click the project name at the top to rename it. Delete is in the toolbar, or on the dashboard card.",
       "Every finished turn is written by the server: closing the tab does not lose the answer or its files.",
+      "The clock in the prompt opens the prompt history: click a prompt to load it back, × to delete it from the list, or pin it as a task.",
+      "An error or notice above the prompt has its own ×, and the next message opens it again.",
     ],
   },
   {
@@ -93,6 +95,7 @@ export const HELP = [
     steps: [
       "The harness adds a step when a reply marks one, and closes it when the work is done.",
       "Add a step yourself, rename one (pencil or double-click), tick it, or delete it with ×.",
+      "A past prompt that describes work still to do can become a step: open the prompt history (the clock in the prompt) and press its pin button.",
       "The list is sent with every turn, so trimming the conversation never loses it.",
       "Open tasks are also visible on the /tasks board across projects.",
     ],
