@@ -725,6 +725,53 @@ async function* streamText(route, { messages, system, signal }) {
   const key = route.key || '';
   const common = { signal: withTimeout(signal, provider.id === 'ollama' ? LOCAL_TIMEOUT_MS : REQUEST_TIMEOUT_MS) };
 
+  if (provider.id === 'ollama') {
+    // The native API rather than the OpenAI-compatible one: it is the only way
+    // to turn thinking off, and a reasoning model on this box's CPU otherwise
+    // spends minutes reasoning before it writes a single word of the answer.
+    const root = (provider.apiBaseUrl || '').replace(/\/v1\/?$/, '');
+    const body = {
+      model: route.model,
+      stream: true,
+      think: false,
+      options: { num_predict: 4096 },
+      messages: [
+        ...(system ? [{ role: 'system', content: system }] : []),
+        ...messages.map((m) => ({
+          role: m.role,
+          content: m.text || '',
+          ...(imagesOf(m).length
+            ? { images: imagesOf(m).map((url) => splitDataUrl(url)?.data).filter(Boolean) }
+            : {}),
+        })),
+      ],
+    };
+
+    const response = await fetch(`${root}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      ...common,
+    });
+    if (!response.ok || !response.body) {
+      throw new Error(await failure(provider.name, response));
+    }
+
+    for await (const line of sseLines(response.body)) {
+      let event;
+      try {
+        event = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (event.error) throw new Error(`${provider.name}: ${event.error}`);
+      const piece = event.message?.content;
+      if (typeof piece === 'string' && piece) yield piece;
+      if (event.done) break;
+    }
+    return;
+  }
+
   if (provider.id === 'google') {
     const body = {
       contents: messages.map((m) => ({
