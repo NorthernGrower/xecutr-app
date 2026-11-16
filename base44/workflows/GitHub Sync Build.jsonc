@@ -1,0 +1,169 @@
+{
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "entity",
+      "events": [
+        "create"
+      ],
+      "entity_name": "GitHubLink"
+    }
+  },
+  "description": "When a new GitHub connection is added, the xecutr agent updates the matching project files from their repositories; once the build has finished, expired preview sessions are cleared.",
+  "name": "GitHub Sync Build",
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "github_sync_build",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "start_sync": {
+          "call": "invoke_server_route",
+          "with": {
+            "path": "/api/agent/github-sync",
+            "body": {
+              "link_id": "${ .trigger.entity_id }"
+            }
+          },
+          "then": "sync_started",
+          "x-base44": {
+            "title": "Ask the agent to sync project files",
+            "description": "Reads the linked repositories and starts the build agent"
+          }
+        }
+      },
+      {
+        "sync_started": {
+          "switch": [
+            {
+              "when": "${ .start_sync.ok == true }",
+              "then": "wait_for_build",
+              "x-base44": {
+                "title": "A repository was read"
+              }
+            },
+            {
+              "when": "${ true }",
+              "then": "end"
+            }
+          ],
+          "x-base44": {
+            "title": "Is there anything to sync?",
+            "description": "Stops when no project is linked to a repository"
+          }
+        }
+      },
+      {
+        "wait_for_build": {
+          "wait": "PT2M",
+          "then": "check_build",
+          "x-base44": {
+            "title": "Wait for the build",
+            "description": "Gives the agent time to write the files"
+          }
+        }
+      },
+      {
+        "check_build": {
+          "call": "invoke_server_route",
+          "with": {
+            "path": "/api/agent/github-sync-status",
+            "body": {
+              "conversation_id": "${ .start_sync.conversation_id }"
+            }
+          },
+          "then": "build_finished",
+          "x-base44": {
+            "title": "Check the build",
+            "description": "Whether the agent has finished"
+          }
+        }
+      },
+      {
+        "build_finished": {
+          "switch": [
+            {
+              "when": "${ .check_build.ok == true }",
+              "then": "prune_previews",
+              "x-base44": {
+                "title": "Build successful"
+              }
+            },
+            {
+              "when": "${ true }",
+              "then": "wait_more"
+            }
+          ],
+          "x-base44": {
+            "title": "Did the build succeed?",
+            "description": "Success clears previews, otherwise wait once more"
+          }
+        }
+      },
+      {
+        "wait_more": {
+          "wait": "PT3M",
+          "then": "check_again",
+          "x-base44": {
+            "title": "Wait longer",
+            "description": "A large sync needs more time"
+          }
+        }
+      },
+      {
+        "check_again": {
+          "call": "invoke_server_route",
+          "with": {
+            "path": "/api/agent/github-sync-status",
+            "body": {
+              "conversation_id": "${ .start_sync.conversation_id }"
+            }
+          },
+          "then": "build_finished_again",
+          "x-base44": {
+            "title": "Check the build again",
+            "description": "Final check before giving up"
+          }
+        }
+      },
+      {
+        "build_finished_again": {
+          "switch": [
+            {
+              "when": "${ .check_again.ok == true }",
+              "then": "prune_previews",
+              "x-base44": {
+                "title": "Build successful"
+              }
+            },
+            {
+              "when": "${ true }",
+              "then": "end"
+            }
+          ],
+          "x-base44": {
+            "title": "Did the build succeed?",
+            "description": "Only a finished build clears previews"
+          }
+        }
+      },
+      {
+        "prune_previews": {
+          "call": "invoke_server_route",
+          "with": {
+            "path": "/api/previews-prune",
+            "method": "POST"
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Clear expired preview sessions",
+            "description": "Frees the resources held by previews nobody can open"
+          }
+        }
+      }
+    ]
+  }
+}
