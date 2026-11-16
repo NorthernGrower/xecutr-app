@@ -855,17 +855,22 @@ const REFUSAL =
 /** Models write ’ as often as ', so a refusal must match either. */
 const straightApostrophes = (text) => text.replace(/[\u2018\u2019\u201a\u201b\u02bc]/g, "'");
 
+/** A decline is short: a model that writes this much is doing the work. */
+const REFUSAL_MAX_CHARS = 700;
+/** And it is judged by its opening, where a decline shows itself. */
+const REFUSAL_WINDOW = 320;
+
 /**
- * Whether a reply is a decline rather than work. A short reply that declines is
- * a refusal; so is a long one whose opening declines, because the person is
- * told no before anything useful arrives. A long reply that helps and mentions
- * a limit part-way through is still an answer.
+ * Whether a reply is a decline rather than work. A refusal is short and opens
+ * with the decline ("I'm sorry, but I can't …", "I understand, however I can't
+ * build …"). A long reply is an answer even when it mentions a limit on the way
+ * past — a model writing a keylogger says "you can't see it in Task Manager"
+ * often enough — so text this long is never re-run on another model.
  */
 const looksLikeRefusal = (text) => {
   const trimmed = straightApostrophes(String(text || '')).trim();
-  if (!trimmed) return false;
-  if (!REFUSAL.test(trimmed)) return false;
-  return trimmed.length < 700 || REFUSAL.test(trimmed.slice(0, 240));
+  if (!trimmed || trimmed.length >= REFUSAL_MAX_CHARS) return false;
+  return REFUSAL.test(trimmed.slice(0, REFUSAL_WINDOW));
 };
 
 /* ------------------------------------------------------- one-shot answers */
