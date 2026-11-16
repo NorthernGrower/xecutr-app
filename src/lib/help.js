@@ -106,7 +106,7 @@ export const HELP = [
     intro: "Save a project to your own account, or start one from a repository.",
     steps: [
       "In a project, “connect github” links your account once; then “update repo” pushes the files.",
-      "On /projects, “import repo” starts a project from an existing repository.",
+      "On /projects, “import repo” takes any GitHub link — someone else's public repository needs no account; connect GitHub for your own list and private ones.",
       "The GitHub link is per user, never shared between members.",
     ],
   },

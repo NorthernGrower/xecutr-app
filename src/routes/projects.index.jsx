@@ -136,6 +136,14 @@ function ProjectsDashboard() {
                 >
                   start a project
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => setImportOpen(true)}
+                  className="ml-2 mt-5 inline-flex items-center gap-1.5 rounded-sm border border-white/15 px-3.5 py-2 font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition hover:border-[#b0c4de]/50 hover:text-white"
+                >
+                  <FolderGit2 className="h-3 w-3" strokeWidth={1.8} />
+                  import a repo
+                </button>
               </Panel>
             ) : (
               <>

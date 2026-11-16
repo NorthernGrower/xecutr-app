@@ -174,54 +174,158 @@ export const importGitHubRepo = createServerFn({ method: "POST" })
 
     if (!paths.length) return { ok: false, error: "That repository has no readable source files." };
 
-    const encodePath = (path) => path.split("/").map(encodeURIComponent).join("/");
-    const raw = { ...headersFor(token), Accept: "application/vnd.github.raw" };
-
-    const files = [];
-    for (let index = 0; index < paths.length; index += 10) {
-      const batch = paths.slice(index, index + 10);
-      const got = await Promise.all(
-        batch.map(async (path) => {
-          try {
-            const res = await fetch(
-              `${GH}/repos/${data.repoFullName}/contents/${encodePath(path)}?ref=${encodeURIComponent(branch)}`,
-              { headers: raw, signal: AbortSignal.timeout(15000) },
-            );
-            if (!res.ok) return null;
-            const text = await res.text();
-            return { path, content: text.slice(0, MAX_CHARS) };
-          } catch {
-            return null;
-          }
-        }),
-      );
-      files.push(...got.filter(Boolean));
-    }
-
+    const files = await readFiles({ fullName: data.repoFullName, branch, paths, token });
     if (!files.length) return { ok: false, error: "Those files could not be read." };
 
-    const base44 = context.getBase44();
-    const project = await base44.entities.Project.create({
-      name: meta.name || data.repoFullName,
-      summary: (meta.description || `Imported from ${data.repoFullName}`).slice(0, 300),
-      file_count: files.length,
-      message_count: 0,
-      last_activity: new Date().toISOString(),
-      repo_full_name: data.repoFullName,
-      repo_url: meta.html_url || `https://github.com/${data.repoFullName}`,
-    });
+    return createImportedProject(context, { fullName: data.repoFullName, meta, files });
+  });
 
-    await base44.entities.ProjectFile.bulkCreate(
-      files.map((file) => ({
-        project_id: project.id,
-        path: file.path,
-        content: file.content,
-        language: langOf(file.path),
-        size: file.content.length,
-      })),
+/**
+ * `https://github.com/owner/repo(.git)`, a link into a branch
+ * (`…/tree/main`), `github.com/owner/repo` or `owner/repo`.
+ */
+const parseRepoRef = (value) => {
+  const cleaned = String(value || "")
+    .trim()
+    .replace(/^git\+/, "")
+    .replace(/^https?:\/\/(www\.)?github\.com\//i, "")
+    .replace(/\.git$/i, "")
+    .replace(/^\/+|\/+$/g, "");
+  const parts = cleaned.split("/").filter(Boolean);
+  if (parts.length < 2) return null;
+  const [owner, repo] = parts;
+  if (!/^[A-Za-z0-9._-]+$/.test(owner) || !/^[A-Za-z0-9._-]+$/.test(repo)) return null;
+  const branch =
+    parts[2] === "tree" && parts.length > 3 ? decodeURIComponent(parts.slice(3).join("/")) : "";
+  return { fullName: `${owner}/${repo}`, branch };
+};
+
+const encodePath = (path) => path.split("/").map(encodeURIComponent).join("/");
+
+/**
+ * The bytes of each path. Public repositories are read from
+ * raw.githubusercontent.com, which needs no token and has no API quota; a
+ * connected account's token falls back to the API, which also reads private
+ * repositories.
+ */
+async function readFiles({ fullName, branch, paths, token }) {
+  const raw = token ? { ...headersFor(token), Accept: "application/vnd.github.raw" } : null;
+  const files = [];
+
+  for (let index = 0; index < paths.length; index += 10) {
+    const batch = paths.slice(index, index + 10);
+    const got = await Promise.all(
+      batch.map(async (path) => {
+        try {
+          const url = token
+            ? `${GH}/repos/${fullName}/contents/${encodePath(path)}?ref=${encodeURIComponent(branch)}`
+            : `https://raw.githubusercontent.com/${fullName}/${encodePath(branch)}/${encodePath(path)}`;
+          const res = await fetch(url, {
+            headers: raw || { "user-agent": "xecutr" },
+            signal: AbortSignal.timeout(15000),
+          });
+          if (!res.ok) return null;
+          const text = await res.text();
+          return { path, content: text.slice(0, MAX_CHARS) };
+        } catch {
+          return null;
+        }
+      }),
     );
+    files.push(...got.filter(Boolean));
+  }
 
-    return { ok: true, projectId: project.id, name: project.name, files: files.length };
+  return files;
+}
+
+async function createImportedProject(context, { fullName, meta, files }) {
+  const base44 = context.getBase44();
+  const project = await base44.entities.Project.create({
+    name: meta.name || fullName.split("/")[1] || fullName,
+    summary: (meta.description || `Imported from ${fullName}`).slice(0, 300),
+    file_count: files.length,
+    message_count: 0,
+    last_activity: new Date().toISOString(),
+    repo_full_name: fullName,
+    repo_url: meta.html_url || `https://github.com/${fullName}`,
+  });
+
+  await base44.entities.ProjectFile.bulkCreate(
+    files.map((file) => ({
+      project_id: project.id,
+      path: file.path,
+      content: file.content,
+      language: langOf(file.path),
+      size: file.content.length,
+    })),
+  );
+
+  return { ok: true, projectId: project.id, name: project.name, files: files.length };
+}
+
+/**
+ * Import any GitHub repository by link — someone else's public repository needs
+ * no connection at all, which is what "import this repo" usually means.
+ */
+export const importRepoByUrl = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(z.object({ repo: z.string().min(3).max(300), branch: z.string().max(120).optional() }))
+  .handler(async ({ data, context }) => {
+    const ref = parseRepoRef(data.repo);
+    if (!ref) {
+      return { ok: false, error: "That is not a GitHub repository link. Use https://github.com/owner/repo." };
+    }
+    const { fullName } = ref;
+
+    const link = await linkFor(context);
+    const token = link?.token || "";
+    const headers = token
+      ? headersFor(token)
+      : { Accept: "application/vnd.github+json", "user-agent": "xecutr", "X-GitHub-Api-Version": "2022-11-28" };
+
+    const metaRes = await fetch(`${GH}/repos/${fullName}`, { headers });
+    if (!metaRes.ok) {
+      return {
+        ok: false,
+        error:
+          metaRes.status === 404
+            ? "That repository is private or does not exist. Connect GitHub to import a private one."
+            : metaRes.status === 403
+              ? "GitHub is rate-limiting this server. Connect GitHub to import right now."
+              : `GitHub answered ${metaRes.status}.`,
+      };
+    }
+    const meta = await metaRes.json();
+    const branch = data.branch || ref.branch || meta.default_branch || "main";
+
+    const treeRes = await fetch(
+      `${GH}/repos/${fullName}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+      { headers },
+    );
+    if (!treeRes.ok) {
+      return { ok: false, error: `Could not read the ${branch} branch (${treeRes.status}).` };
+    }
+    const tree = await treeRes.json();
+
+    const paths = (tree.tree || [])
+      .filter(
+        (entry) =>
+          entry.type === "blob" &&
+          entry.path &&
+          TEXT_FILE.test(entry.path) &&
+          !SKIP_DIR.test(entry.path) &&
+          (entry.size ?? 0) <= MAX_CHARS,
+      )
+      .map((entry) => entry.path)
+      .sort()
+      .slice(0, MAX_FILES);
+
+    if (!paths.length) return { ok: false, error: "That repository has no readable source files." };
+
+    const files = await readFiles({ fullName, branch, paths, token });
+    if (!files.length) return { ok: false, error: "Those files could not be read." };
+
+    return createImportedProject(context, { fullName, meta, files });
   });
 
 /**
