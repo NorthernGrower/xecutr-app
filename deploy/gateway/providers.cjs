@@ -27,7 +27,17 @@
 
 const DISCOVERY_TTL_MS = 10 * 60 * 1000;
 const DISCOVERY_TIMEOUT_MS = 8000;
-const REQUEST_TIMEOUT_MS = 120000;
+/**
+ * A hosted provider answers in one go: two minutes is plenty, and a hung call
+ * must not hold a whole turn.
+ */
+const REQUEST_TIMEOUT_MS = Number(process.env.GATEWAY_REQUEST_TIMEOUT_MS) || 120000;
+/**
+ * This server's models run on its own CPU, where a long answer legitimately
+ * takes minutes. Cutting it off at two minutes turned a working model into a
+ * failed route, so the local models get a much longer window.
+ */
+const LOCAL_TIMEOUT_MS = Number(process.env.GATEWAY_LOCAL_TIMEOUT_MS) || 900000;
 const MODEL_ID_PATTERN = /^[A-Za-z0-9._:/-]{1,80}$/;
 
 const OLLAMA = (process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434/v1').replace(/\/+$/, '');
@@ -713,7 +723,7 @@ async function* streamText(route, { messages, system, signal }) {
   if (!provider) throw new Error(`Unknown provider: ${route.id}`);
 
   const key = route.key || '';
-  const common = { signal: withTimeout(signal, REQUEST_TIMEOUT_MS) };
+  const common = { signal: withTimeout(signal, provider.id === 'ollama' ? LOCAL_TIMEOUT_MS : REQUEST_TIMEOUT_MS) };
 
   if (provider.id === 'google') {
     const body = {
