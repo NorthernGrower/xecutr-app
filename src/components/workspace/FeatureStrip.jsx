@@ -1,8 +1,8 @@
 const FEATURES = [
-  { title: "ultra-fast coding agent", body: "Answers stream token by token, files land as they are written." },
-  { title: "advanced AI assistance", body: "Auto routing picks the best ready provider, then fails over." },
-  { title: "flexible workflows", body: "Bring your own keys, or start keyless and switch later." },
-  { title: "no limits on your ideas", body: "Every project keeps its files and its own memory." },
+  { title: "prompt to project", body: "One prompt starts a project. Plan first if you like, then build: files land in the project as they are written." },
+  { title: "a model chain, not a model", body: "The fastest hosted provider answers first, the chain walks down by speed, and refusals land on this server's own model." },
+  { title: "your keys, or none", body: "Start keyless, then add Groq, Gemini, OpenAI or any other provider under Connections — or one shared key for everyone." },
+  { title: "memory that survives", body: "Files, pinned tasks and notes travel with the project, so trimming the conversation never loses what matters." },
 ];
 
 /** Column rules: stacked on phones, two up on tablets, four across on desktop. */

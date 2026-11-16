@@ -97,7 +97,7 @@ function WorkspaceEntry() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background">
-      <WorkspaceHeader providerLabel={user ? undefined : "keyless gateway"} />
+      <WorkspaceHeader providerLabel={user ? undefined : "auto routing"} />
 
       <div className="mx-auto flex w-full max-w-[1400px] flex-1">
         {user && (
@@ -119,6 +119,14 @@ function WorkspaceEntry() {
                 ? "Describe the project. The agent writes the files, keeps the memory and labels every reply with the model behind it."
                 : "Prompt a project and watch it stream — no key, no signup. Every reply is labelled with the provider and model that answered it."}
             </p>
+            <p className="mt-3 text-center">
+              <Link
+                to="/help"
+                className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#0e7490] transition hover:underline"
+              >
+                how it works →
+              </Link>
+            </p>
           </div>
 
           {user ? (
@@ -133,7 +141,7 @@ function WorkspaceEntry() {
                 placeholder="e.g. build a Python CLI that renames photos by capture date"
                 footer={
                   <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                    auto routing · free tier first
+                    auto · fastest hosted first
                   </span>
                 }
               />

@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Bot, Cpu, LayoutGrid, ListTodo, LogOut, Menu, Plug, Shield, User as UserIcon } from "lucide-react";
+import { BookOpen, Bot, Cpu, LayoutGrid, ListTodo, LogOut, Menu, Plug, Shield, User as UserIcon } from "lucide-react";
 import Mark from "@/components/brand/Mark";
 import {
   DropdownMenu,
@@ -24,6 +24,7 @@ export default function WorkspaceHeader({ providerLabel }) {
     { to: "/tasks", label: "tasks", Icon: ListTodo },
     { to: "/agent", label: "agent", Icon: Bot },
     { to: "/connections", label: "connections", Icon: Plug },
+    { to: "/help", label: "help", Icon: BookOpen },
     { to: "/profile", label: "profile", Icon: UserIcon },
     ...(user?.role === "admin" ? [{ to: "/admin", label: "admin", Icon: Shield }] : []),
   ];
