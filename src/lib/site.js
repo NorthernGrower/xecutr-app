@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth-middleware";
-import { postProjectFiles } from "@/lib/xecutr.server";
+import { fetchProjectWork, postProjectFiles } from "@/lib/xecutr.server";
 
 /**
  * Publish a project on its own subdomain: its whole file set goes to this
@@ -39,3 +39,12 @@ export const publishProject = createServerFn({ method: "POST" })
       return { ok: false, error: err?.message || "The server could not take the files." };
     }
   });
+
+/**
+ * What the model has left in this project's private workspace on the server.
+ * It is a working area, not the site: drafts, notes, images in progress.
+ */
+export const readProjectWork = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(z.object({ projectId: z.string().min(1).max(64) }))
+  .handler(({ data }) => fetchProjectWork(data.projectId));

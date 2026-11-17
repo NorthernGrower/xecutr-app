@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Copy, Download, Eye, FileArchive, FolderGit2 } from "lucide-react";
+import { ChevronDown, Copy, Download, Eye, FileArchive, FolderGit2 } from "lucide-react";
 import Panel from "@/components/workspace/Panel";
 import GitHubDialog from "@/components/workspace/GitHubDialog";
 import { downloadZip } from "@/lib/zip";
+import { readProjectWork } from "@/lib/site";
 
 const MEDIA_EXT = /\.(png|jpe?g|webp|gif|avif|mp4|webm|mov)$/i;
 const INLINE_MEDIA = /^data:(image|video)\//i;
@@ -25,7 +26,19 @@ const saveBlob = (blob, name) => {
 
 export default function FilePanel({ project, files, selected, onSelect, onRefresh, onPreview }) {
   const [openGitHub, setOpenGitHub] = useState(false);
+  const [work, setWork] = useState(null);
+  const [workOpen, setWorkOpen] = useState(false);
   const active = files.find((f) => f.path === selected) || files[0] || null;
+
+  /** The model's private workspace on the server: drafts, notes, work in progress. */
+  const toggleWork = async () => {
+    const next = !workOpen;
+    setWorkOpen(next);
+    if (!next || work || !project?.id) return;
+    setWork(null);
+    const res = await readProjectWork({ data: { projectId: project.id } }).catch(() => null);
+    setWork(Array.isArray(res?.files) ? res.files : []);
+  };
 
   const download = (file) => {
     const content = file?.content || "";
@@ -100,6 +113,56 @@ export default function FilePanel({ project, files, selected, onSelect, onRefres
             {file.path}
           </button>
         ))}
+      </div>
+
+      {/* The model's private workspace on the server — never part of the site. */}
+      <div className="border-b border-white/[0.07]">
+        <button
+          type="button"
+          onClick={toggleWork}
+          aria-expanded={workOpen}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-white/[0.03]"
+        >
+          <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#b0c4de]">
+            workspace
+          </span>
+          <span className="font-mono text-[9px] text-muted-foreground">
+            {work === null ? "" : `${work.length} files`}
+          </span>
+          <ChevronDown
+            className={`ml-auto h-3 w-3 shrink-0 text-muted-foreground transition ${
+              workOpen ? "rotate-180" : ""
+            }`}
+            strokeWidth={1.6}
+          />
+        </button>
+
+        {workOpen && (
+          <div className="max-h-32 overflow-auto pb-1">
+            {work === null ? (
+              <p className="px-3 py-2 font-body text-[11.5px] text-muted-foreground">Reading…</p>
+            ) : work.length === 0 ? (
+              <p className="px-3 py-2 font-body text-[11.5px] leading-relaxed text-muted-foreground">
+                Nothing yet. Files the model writes under <span className="font-mono">work/</span> land
+                here instead of in the site.
+              </p>
+            ) : (
+              work.map((file) => (
+                <div
+                  key={file.path}
+                  className="flex items-center gap-2 px-3 py-1 font-mono text-[10.5px] text-[#9aa6b2]"
+                >
+                  <span className="min-w-0 flex-1 truncate" title={file.path}>
+                    {file.path}
+                  </span>
+                  <span className="shrink-0 text-muted-foreground/70">
+                    {Math.max(1, Math.round((file.size || 0) / 1024))}k
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">

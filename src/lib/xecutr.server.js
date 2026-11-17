@@ -180,40 +180,60 @@ export async function fetchChannels() {
 }
 
 /**
- * POST /api/project-files — hand the gateway a project's whole file set so it
- * writes it to its own disk and serves it on the project's subdomain.
- *
- * The gateway accepts this only from this machine: the call goes to its loopback
- * port first, because a request through the public domain carries the proxy's
- * forwarding headers and is refused.
+ * The gateway's loopback address when the app's API base is the public domain:
+ * the project endpoints accept calls only from this machine.
  */
-export async function postProjectFiles(body) {
+const internalBase = () => {
   const base = apiBase();
-  const loopback = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(base)
-    ? base
-    : "http://127.0.0.1:8080";
+  return /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(base) ? base : "http://127.0.0.1:8080";
+};
 
-  const send = async (url) => {
-    const res = await fetch(`${url}/api/project-files`, {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify(body),
-    });
-    const payload = await res.json().catch(() => null);
-    if (!res.ok || !payload?.ok) {
-      throw Object.assign(
-        new Error(payload?.error || `The gateway answered ${res.status}.`),
-        { status: 502 },
-      );
-    }
-    return payload;
-  };
+/** A private call, tried on loopback first and on the public base as a fallback. */
+const callInternal = async (pathname, init = {}) => {
+  const loopback = internalBase();
+  const send = (url) => fetch(`${url}${pathname}`, { ...init, headers: headers() });
 
   try {
     return await send(loopback);
   } catch (err) {
-    if (loopback === base) throw err;
-    return send(base);
+    if (loopback === apiBase()) throw err;
+    return send(apiBase());
+  }
+};
+
+/**
+ * POST /api/project-files — hand the gateway a project's whole file set so it
+ * writes it to its own disk and serves it on the project's subdomain.
+ */
+export async function postProjectFiles(body) {
+  const res = await callInternal("/api/project-files", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  const payload = await res.json().catch(() => null);
+  if (!res.ok || !payload?.ok) {
+    throw Object.assign(new Error(payload?.error || `The gateway answered ${res.status}.`), {
+      status: 502,
+    });
+  }
+  return payload;
+}
+
+/** GET /api/project-work — what the model has left in the project's workspace. */
+export async function fetchProjectWork(projectId) {
+  try {
+    const res = await callInternal(
+      `/api/project-work?projectId=${encodeURIComponent(projectId)}`,
+      { method: "GET" },
+    );
+    const payload = await res.json().catch(() => null);
+    return {
+      ok: Boolean(payload?.ok),
+      found: Boolean(payload?.found),
+      files: Array.isArray(payload?.files) ? payload.files : [],
+    };
+  } catch (err) {
+    return { ok: false, found: false, files: [], error: String(err?.message || err) };
   }
 }
 

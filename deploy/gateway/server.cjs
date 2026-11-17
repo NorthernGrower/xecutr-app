@@ -236,7 +236,12 @@ const systemPrompt = (body, uploadNotes) => {
       'One block per file, each one the whole file (never a diff, never "the rest of the file"), ' +
       'with paths relative to the project root. Put short prose before the blocks, never inside ' +
       'them, and do not describe the files you are about to write — write them. If the turn is ' +
-      'only a question, answer it and write no blocks.',
+      'only a question, answer it and write no blocks. ' +
+      'On this server each project also has a private workspace: any file whose path starts with ' +
+      '`work/` (for example `work/notes.md`, `work/drafts/home.html`, `work/images/idea.png`) is ' +
+      'saved there instead of into the site. Use it for drafts, notes, data you are still working ' +
+      'on and anything that should not be published; it is never served and never part of the ' +
+      'site. Everything outside `work/` is the real project.',
   );
   if (body.files?.length) {
     let budget = 120000;
@@ -785,6 +790,24 @@ const projectHost = (host) => {
 };
 
 /**
+ * The files in one project's private workspace on this server. Same rule as the
+ * write endpoint: only this machine may ask.
+ */
+const projectWork = async (req, res) => {
+  const forwarded = req.headers['x-forwarded-for'] || req.headers['x-real-ip'];
+  if (forwarded) {
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'Not from this server.' }));
+    return;
+  }
+
+  const projectId = new URL(req.url, 'http://localhost').searchParams.get('projectId') || '';
+  const files = projects.listWork(projectId);
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ ok: true, found: files !== null, files: files || [] }));
+};
+
+/**
  * The app pushes a project's whole file set here when the person publishes it.
  * Only this host may call it: a request that came through Caddy carries
  * X-Forwarded-For, and a direct one from the app on the same machine does not.
@@ -874,6 +897,8 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ ok: true, name: 'xecutr', time: new Date().toISOString() }));
   } else if (pathname === '/api/project-files' && req.method === 'POST') {
     projectFiles(req, res);
+  } else if (pathname === '/api/project-work' && req.method === 'GET') {
+    projectWork(req, res);
   } else if (pathname === '/api/providers' && (req.method === 'GET' || req.method === 'POST')) {
     providerCatalogue(req, res);
   } else if (pathname === '/api/uploads' && req.method === 'POST') {

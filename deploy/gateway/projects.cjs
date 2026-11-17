@@ -93,8 +93,47 @@ const dirFor = (projectId, projectName) => {
 };
 
 /**
+ * Every project has two folders on this server:
+ *
+ *   site/  what the project is — published, served at /<slug>
+ *   work/  a private workspace for the model: drafts, notes, images it is
+ *          working on, anything not meant to be the site yet. Never served.
+ *
+ * A directory written before this split kept its files at the root; they are
+ * moved into site/ the first time it is touched.
+ */
+const ensureLayout = (dir) => {
+  const site = path.join(dir, 'site');
+  const work = path.join(dir, 'work');
+  fs.mkdirSync(site, { recursive: true });
+  fs.mkdirSync(work, { recursive: true });
+
+  let entries = [];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return { site, work };
+  }
+
+  for (const entry of entries) {
+    if (entry.name === 'site' || entry.name === 'work' || entry.name === 'project.json') continue;
+    try {
+      fs.renameSync(path.join(dir, entry.name), path.join(site, entry.name));
+    } catch {
+      /* a file we cannot move stays where it is and simply is not served */
+    }
+  }
+  return { site, work };
+};
+
+const WORK_PREFIX = /^(work|workspace)\//i;
+
+/**
  * Write a project's files to disk. Called after every finished turn (with the
  * files that turn produced) and by the app's publish action (with all of them).
+ *
+ * A path under `work/` goes to the model's private workspace; every other path
+ * is the project's site.
  */
 function mirror({ projectId, projectName, files = [], published = false }) {
   if (!projectId) return null;
@@ -102,19 +141,24 @@ function mirror({ projectId, projectName, files = [], published = false }) {
 
   const { dir, slug } = dirFor(projectId, projectName);
   fs.mkdirSync(dir, { recursive: true });
+  const { site, work } = ensureLayout(dir);
 
   let written = 0;
+  let workspace = 0;
   for (const file of files) {
     const relative = safeRelative(file.path);
     if (!relative) continue;
 
-    const target = path.join(dir, relative);
+    const isWork = WORK_PREFIX.test(relative);
+    const target = path.join(isWork ? work : site, relative.replace(WORK_PREFIX, ''));
+    if (!target.startsWith(`${isWork ? work : site}${path.sep}`)) continue;
     fs.mkdirSync(path.dirname(target), { recursive: true });
 
     const binary = decodeDataUrl(file.content);
     if (binary) fs.writeFileSync(target, binary.bytes);
     else fs.writeFileSync(target, String(file.content || ''), 'utf8');
-    written += 1;
+    if (isWork) workspace += 1;
+    else written += 1;
   }
 
   const manifest = {
@@ -132,7 +176,7 @@ function mirror({ projectId, projectName, files = [], published = false }) {
   }
   fs.writeFileSync(path.join(dir, 'project.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 
-  return { dir, slug, written, files: countFiles(dir) };
+  return { dir, slug, written, workspace, files: countFiles(site) };
 }
 
 function countFiles(dir) {
@@ -182,6 +226,10 @@ function serve(slug, req, res, rest = '') {
   const manifest = path.join(dir, 'project.json');
   if (!fs.existsSync(manifest)) return false;
 
+  // Only the site folder is ever served; the model's workspace is private.
+  const base = path.join(dir, 'site');
+  ensureLayout(dir);
+
   let relative;
   try {
     relative = safeRelative(decodeURIComponent(rest));
@@ -189,20 +237,20 @@ function serve(slug, req, res, rest = '') {
     relative = safeRelative(rest);
   }
 
-  let file = path.join(dir, relative || 'index.html');
+  let file = path.join(base, relative || 'index.html');
   if (relative && fs.existsSync(file) && fs.statSync(file).isDirectory()) {
     file = path.join(file, 'index.html');
   }
 
   // A single-page project: unknown paths fall back to its index.
-  if (!fs.existsSync(file) && !path.extname(relative || '')) file = path.join(dir, 'index.html');
+  if (!fs.existsSync(file) && !path.extname(relative || '')) file = path.join(base, 'index.html');
   if (!fs.existsSync(file)) {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Not found');
     return true;
   }
 
-  if (!file.startsWith(`${dir}${path.sep}`) && file !== path.join(dir, 'index.html')) {
+  if (!file.startsWith(`${base}${path.sep}`) && file !== path.join(base, 'index.html')) {
     res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Forbidden');
     return true;
@@ -214,6 +262,65 @@ function serve(slug, req, res, rest = '') {
   });
   fs.createReadStream(file).pipe(res);
   return true;
+}
+
+/** Every file in one project's private workspace, with sizes. */
+function listWork(projectId) {
+  const dir = dirForProjectId(projectId);
+  if (!dir) return null;
+
+  const { work } = ensureLayout(dir);
+  const out = [];
+
+  const walk = (current) => {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      try {
+        const stat = fs.statSync(full);
+        out.push({
+          path: path.relative(work, full).split(path.sep).join('/'),
+          size: stat.size,
+          modified: stat.mtime.toISOString(),
+        });
+      } catch {
+        /* unreadable entries are left out */
+      }
+    }
+  };
+
+  walk(work);
+  return out.sort((a, b) => b.modified.localeCompare(a.modified)).slice(0, 200);
+}
+
+/** The directory of the project with this id, if it has one on disk. */
+function dirForProjectId(projectId) {
+  const id = String(projectId || '');
+  if (!id) return null;
+  try {
+    for (const entry of fs.readdirSync(ROOT, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const candidate = path.join(ROOT, entry.name);
+      try {
+        const manifest = JSON.parse(fs.readFileSync(path.join(candidate, 'project.json'), 'utf8'));
+        if (manifest?.id === id) return candidate;
+      } catch {
+        /* not a project directory */
+      }
+    }
+  } catch {
+    /* no projects yet */
+  }
+  return null;
 }
 
 /** What a subdomain's root shows when no project has that name. */
@@ -230,4 +337,4 @@ function listing(res) {
   );
 }
 
-module.exports = { mirror, serve, published, listing, slugify, ROOT };
+module.exports = { mirror, serve, published, listing, listWork, slugify, ROOT };
