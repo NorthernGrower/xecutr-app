@@ -22,6 +22,7 @@ export const HELP = [
     steps: [
       "Type a prompt on the home page and press send — that creates the project and opens it.",
       "The workspace has chat on the left, files on the right, and a preview tab that renders the project.",
+      "On a phone the workspace shows one pane at a time, with chat / files / preview on a bar at the bottom; the menu's “layout” switch can force the desktop layout (or back) and remembers the choice on that device.",
       "Click the project name at the top to rename it. Delete is in the toolbar, or on the dashboard card.",
       "Every finished turn is written by the server: closing the tab does not lose the answer or its files.",
       "The clock in the prompt opens the prompt history: click a prompt to load it back, × to delete it from the list, or pin it as a task.",

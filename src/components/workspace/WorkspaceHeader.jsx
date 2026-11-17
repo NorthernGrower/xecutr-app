@@ -1,5 +1,21 @@
 import { Link } from "@tanstack/react-router";
-import { BookOpen, Bot, Cpu, LayoutGrid, ListTodo, LogOut, Menu, Plug, Shield, User as UserIcon } from "lucide-react";
+import {
+  BookOpen,
+  Bot,
+  Check,
+  Cpu,
+  LayoutGrid,
+  ListTodo,
+  LogOut,
+  Menu,
+  Monitor,
+  MoreHorizontal,
+  Plug,
+  Shield,
+  Smartphone,
+  Sparkles,
+  User as UserIcon,
+} from "lucide-react";
 import Mark from "@/components/brand/Mark";
 import {
   DropdownMenu,
@@ -10,13 +26,24 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/AuthContext";
+import { LAYOUT_CHOICES, useLayoutMode } from "@/hooks/use-layout-mode";
 
 const NAV_CLASS =
   "inline-flex items-center gap-1.5 rounded-sm border border-white/10 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground transition hover:border-[#b0c4de]/40 hover:text-white";
 
-/** Top chrome shared by every workspace screen. Nav collapses into a menu on phones. */
+const VIEW_ICONS = { auto: Sparkles, mobile: Smartphone, desktop: Monitor };
+
+/**
+ * Top chrome shared by every workspace screen.
+ *
+ * Two layouts, chosen by the device: on a phone the navigation folds into the
+ * menu and the bar keeps only the mark, the account and the menu; on a desktop
+ * the destinations are inline. The menu always carries the layout switch, so a
+ * phone can ask for the desktop layout (and back) and the choice is remembered.
+ */
 export default function WorkspaceHeader({ providerLabel }) {
   const { user, isLoadingAuth, logout, navigateToLogin } = useAuth();
+  const { isMobile, preference, setPreference } = useLayoutMode();
 
   // Profile is for every member; admin only for whoever the platform marks as admin.
   const NAV = [
@@ -29,19 +56,86 @@ export default function WorkspaceHeader({ providerLabel }) {
     ...(user?.role === "admin" ? [{ to: "/admin", label: "admin", Icon: Shield }] : []),
   ];
 
+  const menu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Open menu"
+          className="rounded-sm border border-white/10 p-1.5 text-muted-foreground transition hover:border-[#b0c4de]/40 hover:text-white"
+        >
+          {isMobile ? (
+            <Menu className="h-4 w-4" strokeWidth={1.6} />
+          ) : (
+            <MoreHorizontal className="h-4 w-4" strokeWidth={1.8} />
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60 border-white/10 bg-[#0b0b0b] p-1">
+        <DropdownMenuLabel className="truncate font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+          {user?.full_name || user?.email}
+        </DropdownMenuLabel>
+
+        {isMobile &&
+          NAV.map(({ to, label, Icon }) => (
+            <DropdownMenuItem key={to} asChild>
+              <Link
+                to={to}
+                className="flex items-center gap-2 rounded-sm px-2 py-2 font-display text-[11px] uppercase tracking-[0.14em] text-white outline-none focus:bg-white/[0.06]"
+              >
+                <Icon className="h-3.5 w-3.5 text-[#b0c4de]" strokeWidth={1.6} />
+                {label}
+              </Link>
+            </DropdownMenuItem>
+          ))}
+
+        {isMobile && <DropdownMenuSeparator className="bg-white/10" />}
+
+        <DropdownMenuLabel className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+          layout
+        </DropdownMenuLabel>
+        {LAYOUT_CHOICES.map(({ id, label }) => {
+          const Icon = VIEW_ICONS[id] || Sparkles;
+          return (
+            <DropdownMenuItem
+              key={id}
+              onSelect={() => setPreference(id)}
+              className="flex items-center gap-2 rounded-sm px-2 py-2 font-display text-[11px] normal-case tracking-normal text-white outline-none focus:bg-white/[0.06]"
+            >
+              <Icon className="h-3.5 w-3.5 text-[#b0c4de]" strokeWidth={1.6} />
+              <span className="flex-1">{label}</span>
+              {preference === id && <Check className="h-3 w-3 text-[#e0f7ff]" strokeWidth={2.2} />}
+            </DropdownMenuItem>
+          );
+        })}
+
+        <DropdownMenuSeparator className="bg-white/10" />
+        <DropdownMenuItem
+          onSelect={() => logout()}
+          className="flex items-center gap-2 rounded-sm px-2 py-2 font-display text-[11px] uppercase tracking-[0.14em] text-muted-foreground outline-none focus:bg-white/[0.06] focus:text-white"
+        >
+          <LogOut className="h-3.5 w-3.5" strokeWidth={1.6} />
+          sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   return (
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#0a0a0a]/85 backdrop-blur-xl">
       <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-3 px-3 sm:px-6">
         <Link to="/" className="shrink-0">
-          <Mark size={26} />
+          <Mark size={isMobile ? 22 : 26} />
         </Link>
 
-        <span className="hidden font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground lg:inline">
-          build beyond limits
-        </span>
+        {!isMobile && (
+          <span className="hidden font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground lg:inline">
+            build beyond limits
+          </span>
+        )}
 
         <div className="ml-auto flex min-w-0 items-center gap-2">
-          {providerLabel && (
+          {providerLabel && !isMobile && (
             <span className="hidden items-center gap-2 rounded-sm border border-[#b0c4de]/20 bg-white/[0.02] px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-[#b0c4de] xl:inline-flex">
               <Cpu className="h-3 w-3" strokeWidth={1.6} />
               {providerLabel}
@@ -60,66 +154,35 @@ export default function WorkspaceHeader({ providerLabel }) {
 
           {user && (
             <>
-              <nav className="hidden items-center gap-1.5 md:flex">
-                {NAV.map(({ to, label, Icon }) => (
-                  <Link key={to} to={to} className={NAV_CLASS}>
-                    <Icon className="h-3 w-3" strokeWidth={1.6} />
-                    {label}
-                  </Link>
-                ))}
-              </nav>
+              {!isMobile && (
+                <nav className="hidden items-center gap-1.5 md:flex">
+                  {NAV.map(({ to, label, Icon }) => (
+                    <Link key={to} to={to} className={NAV_CLASS}>
+                      <Icon className="h-3 w-3" strokeWidth={1.6} />
+                      {label}
+                    </Link>
+                  ))}
+                </nav>
+              )}
 
-              <span className="hidden max-w-[140px] truncate font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground xl:inline">
-                {user.full_name || user.email}
-              </span>
+              {!isMobile && (
+                <>
+                  <span className="hidden max-w-[140px] truncate font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground xl:inline">
+                    {user.full_name || user.email}
+                  </span>
 
-              <button
-                type="button"
-                onClick={() => logout()}
-                aria-label="Sign out"
-                className="hidden rounded-sm border border-white/10 p-1.5 text-muted-foreground transition hover:border-white/30 hover:text-white md:inline-block"
-              >
-                <LogOut className="h-3.5 w-3.5" strokeWidth={1.6} />
-              </button>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    aria-label="Open menu"
-                    className="rounded-sm border border-white/10 p-1.5 text-muted-foreground transition hover:border-[#b0c4de]/40 hover:text-white md:hidden"
-                  >
-                    <Menu className="h-4 w-4" strokeWidth={1.6} />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="w-56 border-white/10 bg-[#0b0b0b] p-1"
-                >
-                  <DropdownMenuLabel className="truncate font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-                    {user.full_name || user.email}
-                  </DropdownMenuLabel>
-                  {NAV.map(({ to, label, Icon }) => (
-                    <DropdownMenuItem key={to} asChild>
-                      <Link
-                        to={to}
-                        className="flex items-center gap-2 rounded-sm px-2 py-2 font-display text-[11px] uppercase tracking-[0.14em] text-white outline-none focus:bg-white/[0.06]"
-                      >
-                        <Icon className="h-3.5 w-3.5 text-[#b0c4de]" strokeWidth={1.6} />
-                        {label}
-                      </Link>
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator className="bg-white/10" />
-                  <DropdownMenuItem
-                    onSelect={() => logout()}
-                    className="flex items-center gap-2 rounded-sm px-2 py-2 font-display text-[11px] uppercase tracking-[0.14em] text-muted-foreground outline-none focus:bg-white/[0.06] focus:text-white"
+                    onClick={() => logout()}
+                    aria-label="Sign out"
+                    className="hidden rounded-sm border border-white/10 p-1.5 text-muted-foreground transition hover:border-white/30 hover:text-white sm:inline-block"
                   >
                     <LogOut className="h-3.5 w-3.5" strokeWidth={1.6} />
-                    sign out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  </button>
+                </>
+              )}
+
+              {menu}
             </>
           )}
         </div>

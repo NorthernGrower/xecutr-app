@@ -5,7 +5,7 @@ import { githubStatus } from "@/lib/github-fns";
 import { useAuth } from "@/lib/AuthContext";
 
 /** The signed-in user's own GitHub state for this project: connect, then update the repo. */
-export default function GitHubRepoButton({ project, onSaved }) {
+export default function GitHubRepoButton({ project, onSaved, iconOnly = false }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [login, setLogin] = useState(null);
@@ -24,15 +24,16 @@ export default function GitHubRepoButton({ project, onSaved }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        title="Save this project to your own GitHub account"
-        className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] transition ${
+        title={iconOnly ? label : "Save this project to your own GitHub account"}
+        aria-label={label}
+        className={`inline-flex shrink-0 items-center gap-1.5 rounded-sm border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] transition ${
           project?.repo_full_name
             ? "border-[#e0f7ff]/40 text-[#e0f7ff] hover:bg-[#e0f7ff]/[0.08]"
             : "border-white/10 text-muted-foreground hover:border-[#b0c4de]/40 hover:text-white"
         }`}
       >
         <FolderGit2 className="h-3 w-3" strokeWidth={1.6} />
-        {label}
+        {!iconOnly && label}
       </button>
 
       <GitHubDialog open={open} onOpenChange={setOpen} project={project} onSaved={onSaved} />

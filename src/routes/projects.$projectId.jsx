@@ -11,6 +11,7 @@ import DeleteProjectButton from "@/components/projects/DeleteProjectButton";
 import ProjectPreview from "@/components/workspace/ProjectPreview";
 import ProjectRail from "@/components/workspace/ProjectRail";
 import { useAuth } from "@/lib/AuthContext";
+import { useLayoutMode } from "@/hooks/use-layout-mode";
 
 export const Route = createFileRoute("/projects/$projectId")({
   ssr: false,
@@ -53,6 +54,7 @@ function ProjectWorkspace() {
   const { projectId } = Route.useParams();
   const { mode: searchMode } = Route.useSearch();
   const { user, isLoadingAuth, navigateToLogin } = useAuth();
+  const { isMobile } = useLayoutMode();
   const navigate = useNavigate();
 
   const [project, setProject] = useState(null);
@@ -106,7 +108,7 @@ function ProjectWorkspace() {
   const openFile = (path) => {
     if (!path) return;
     setSelected(path);
-    if (typeof window !== "undefined" && window.innerWidth < 768) setPane("files");
+    if (isMobile) setPane("files");
   };
 
   if (!isLoadingAuth && !user) {
@@ -114,6 +116,150 @@ function ProjectWorkspace() {
       <div className="min-h-screen bg-background">
         <WorkspaceHeader />
         <SignInPrompt onSignIn={() => navigateToLogin()} />
+      </div>
+    );
+  }
+
+  const titleBlock = renaming ? (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const name = nameDraft.trim();
+        if (name) {
+          await base44.entities.Project.update(projectId, { name });
+          setProject({ ...project, name });
+        }
+        setRenaming(false);
+      }}
+      className="flex min-w-0 items-center gap-2"
+    >
+      <input
+        autoFocus
+        value={nameDraft}
+        onChange={(e) => setNameDraft(e.target.value)}
+        className="h-7 min-w-0 flex-1 rounded-sm border border-[#b0c4de]/40 bg-[#0b0b0b] px-2 font-display text-[12px] uppercase tracking-[0.1em] text-white outline-none sm:w-56"
+      />
+      <button type="submit" className="shrink-0 text-[#e0f7ff]" aria-label="Save name">
+        <Check className="h-3.5 w-3.5" />
+      </button>
+    </form>
+  ) : (
+    <button
+      type="button"
+      onClick={() => {
+        setNameDraft(project?.name || "");
+        setRenaming(true);
+      }}
+      className="min-w-0 truncate text-left font-display text-[12.5px] font-semibold uppercase tracking-[0.14em] text-white hover:text-[#e0f7ff]"
+      title="Tap to rename"
+    >
+      {title}
+    </button>
+  );
+
+  const deleteButton = (
+    <DeleteProjectButton
+      project={project}
+      onDeleted={() => navigate({ to: "/projects" })}
+      className="rounded-sm border border-white/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:border-red-500/40 hover:text-red-600"
+    />
+  );
+
+  // The phone bar holds three short things: a name, a count and two icons.
+  const mobileDeleteButton = (
+    <DeleteProjectButton
+      project={project}
+      onDeleted={() => navigate({ to: "/projects" })}
+      iconOnly
+      className="rounded-sm border border-white/10 p-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:border-red-500/40 hover:text-red-600"
+    />
+  );
+
+  /**
+   * The phone layout: one pane at a time, a thin project bar, and a bottom tab
+   * bar within reach of a thumb. The desktop layout below keeps the rail, the
+   * side-by-side panes and the inline toolbar.
+   */
+  if (isMobile) {
+    const tabs = [
+      { id: "chat", label: "chat", Icon: MessageSquare },
+      { id: "files", label: "files", Icon: Files },
+      { id: "preview", label: "preview", Icon: Eye },
+    ];
+
+    return (
+      <div className="flex h-[100dvh] flex-col overflow-hidden bg-background">
+        <WorkspaceHeader providerLabel={headerLabel} />
+
+        <div className="flex items-center gap-2 border-b border-white/[0.07] px-3 py-2">
+          {titleBlock}
+          <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+            {files.length} files
+          </span>
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            <GitHubRepoButton project={project} onSaved={reload} iconOnly />
+            {mobileDeleteButton}
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1">
+          {pane === "chat" && (
+            <div className="h-full px-3">
+              <ChatPane
+                key={projectId}
+                projectId={projectId}
+                initialMessages={boot}
+                pendingPrompt={pendingPrompt}
+                onSaved={reload}
+                onOpenFile={openFile}
+                mode={searchMode || "build"}
+              />
+            </div>
+          )}
+
+          {pane === "files" && (
+            <div className="h-full px-3 pb-2">
+              <FilePanel
+                project={project}
+                files={files}
+                selected={selected}
+                onSelect={setSelected}
+                onRefresh={reload}
+                onPreview={() => setPane("preview")}
+              />
+            </div>
+          )}
+
+          {pane === "preview" && (
+            <div className="h-full px-3 pb-2">
+              <ProjectPreview project={project} files={files} />
+            </div>
+          )}
+        </div>
+
+        <nav
+          className="grid shrink-0 grid-cols-3 border-t border-white/[0.07] bg-card/80"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
+          {tabs.map(({ id, label, Icon }) => {
+            const active = pane === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setPane(id)}
+                aria-label={label}
+                aria-pressed={active}
+                className={`flex flex-col items-center gap-1 py-2.5 font-mono text-[9px] uppercase tracking-[0.16em] transition ${
+                  active ? "text-[#e0f7ff]" : "text-muted-foreground"
+                }`}
+              >
+                <Icon className="h-4 w-4" strokeWidth={1.8} />
+                {label}
+              </button>
+            );
+          })}
+        </nav>
       </div>
     );
   }
@@ -129,42 +275,7 @@ function ProjectWorkspace() {
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col border-white/[0.07] sm:border-x">
           <div className="flex flex-wrap items-center gap-2 border-b border-white/[0.07] px-3 py-2 sm:px-4 sm:py-2.5">
-            {renaming ? (
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  const name = nameDraft.trim();
-                  if (name) {
-                    await base44.entities.Project.update(projectId, { name });
-                    setProject({ ...project, name });
-                  }
-                  setRenaming(false);
-                }}
-                className="flex items-center gap-2"
-              >
-                <input
-                  autoFocus
-                  value={nameDraft}
-                  onChange={(e) => setNameDraft(e.target.value)}
-                  className="h-7 w-56 rounded-sm border border-[#b0c4de]/40 bg-[#0b0b0b] px-2 font-display text-[12px] uppercase tracking-[0.1em] text-white outline-none"
-                />
-                <button type="submit" className="text-[#e0f7ff]">
-                  <Check className="h-3.5 w-3.5" />
-                </button>
-              </form>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setNameDraft(project?.name || "");
-                  setRenaming(true);
-                }}
-                className="truncate font-display text-[12.5px] font-semibold uppercase tracking-[0.14em] text-white hover:text-[#e0f7ff]"
-                title="Click to rename"
-              >
-                {title}
-              </button>
-            )}
+            {titleBlock}
 
             <span className="hidden font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground sm:inline">
               {files.length} files
@@ -172,11 +283,7 @@ function ProjectWorkspace() {
 
             <div className="ml-auto flex w-full flex-wrap items-center justify-start gap-1 sm:w-auto sm:justify-end">
               <GitHubRepoButton project={project} onSaved={reload} />
-              <DeleteProjectButton
-                project={project}
-                onDeleted={() => navigate({ to: "/projects" })}
-                className="rounded-sm border border-white/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:border-red-500/40 hover:text-red-600"
-              />
+              {deleteButton}
               <button
                 type="button"
                 onClick={() => setPane("chat")}

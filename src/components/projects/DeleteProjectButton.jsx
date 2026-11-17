@@ -21,7 +21,7 @@ import {
  * (a helper the SDK did not have, a rule that refused it) threw before the
  * project itself was touched, so the project stayed and nothing said why.
  */
-export default function DeleteProjectButton({ project, onDeleted, className }) {
+export default function DeleteProjectButton({ project, onDeleted, className, iconOnly = false }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -64,10 +64,11 @@ export default function DeleteProjectButton({ project, onDeleted, className }) {
           setOpen(true);
         }}
         title="Delete this project"
+        aria-label={iconOnly ? "Delete this project" : undefined}
         className={cn("inline-flex items-center gap-1 transition hover:text-red-300", className)}
       >
         <Trash2 className="h-3 w-3" strokeWidth={1.6} />
-        delete
+        {!iconOnly && "delete"}
       </button>
 
       <AlertDialog open={open} onOpenChange={setOpen}>
