@@ -6,6 +6,7 @@ import Panel from "@/components/workspace/Panel";
 import { authQuery } from "@/lib/AuthContext";
 import { adminTrialUsage } from "@/lib/admin";
 import { BUILD } from "@/lib/build";
+import { CONTEXT_TOKENS } from "@/lib/context";
 import { PUBLISH } from "@/lib/publish";
 import { SITE_KEYS, SITE_KEY_NOTES } from "@/lib/server-keys";
 import { xecutrHealth } from "@/lib/chat";
@@ -201,6 +202,14 @@ function AdminPage() {
                 <span className="font-mono">journalctl -u xecutr-frontend -n 20</span>
               </p>
             )}
+            <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de]">
+              context window · {CONTEXT_TOKENS.toLocaleString()} tokens per turn
+            </p>
+            <p className="mt-1 font-body text-[11.5px] leading-relaxed text-muted-foreground">
+              The whole conversation is stored; each request sends the newest turns up to that budget
+              and a digest of the older ones. Set <span className="font-mono">XECUTR_CONTEXT_TOKENS</span>{" "}
+              to change it without a deploy.
+            </p>
           </Card>
 
           <Card icon={Users} title="anonymous trial usage (per address per day)">

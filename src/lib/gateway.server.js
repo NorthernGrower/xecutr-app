@@ -1,6 +1,22 @@
+import { secrets } from "base44:runtime";
 import { spendTrialTurn } from "@/lib/trial-quota.server";
 import { forwardableKeys } from "@/lib/xecutr.server";
-import { CONTEXT_TOKENS, TRIAL_TOKENS, digestOf, keepWindow } from "@/lib/context.server";
+import { CONTEXT_TOKENS, TRIAL_TOKENS, digestOf, keepWindow } from "@/lib/context";
+
+/**
+ * The window the owner chose: 15,000 tokens per signed-in turn, which fits every
+ * model in the chain and keeps a CPU turn's prompt evaluation short. A
+ * deployment can move it without a code change by setting the
+ * XECUTR_CONTEXT_TOKENS secret.
+ */
+const contextTokens = () => {
+  try {
+    const value = Number(secrets.get("XECUTR_CONTEXT_TOKENS"));
+    return Number.isFinite(value) && value >= 2000 ? value : CONTEXT_TOKENS;
+  } catch {
+    return CONTEXT_TOKENS;
+  }
+};
 
 const MAX_MESSAGE_CHARS = 7800; // the model server accepts 8k per message
 const MAX_CONTEXT_FILES = 40;
@@ -101,7 +117,7 @@ export async function buildTurn(data, context) {
   // The newest turns in full; everything older is condensed below, so trimming
   // never loses the thread.
   const windowed = keepWindow(history, {
-    tokens: anonymous ? TRIAL_TOKENS : CONTEXT_TOKENS,
+    tokens: anonymous ? TRIAL_TOKENS : contextTokens(),
   });
 
   const messages = windowed.kept.map((m) => ({
