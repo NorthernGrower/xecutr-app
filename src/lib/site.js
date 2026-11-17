@@ -48,3 +48,37 @@ export const readProjectWork = createServerFn({ method: "POST" })
   .middleware([requireUser])
   .validator(z.object({ projectId: z.string().min(1).max(64) }))
   .handler(({ data }) => fetchProjectWork(data.projectId));
+
+/**
+ * Put the project's files on this server and return the address that serves
+ * them — the same mechanism as publishing, without marking it published. This
+ * is what the preview pane uses, so it needs no service credential and no
+ * temporary session record.
+ */
+export const prepareProjectSite = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(z.object({ projectId: z.string().min(1).max(64) }))
+  .handler(async ({ data, context }) => {
+    const base44 = context.getBase44();
+
+    const project = await base44.entities.Project.get(data.projectId).catch(() => null);
+    if (!project) return { error: "That project is not available." };
+
+    const rows = await base44.entities.ProjectFile.filter({ project_id: data.projectId }, "path", 500);
+    const files = (rows || [])
+      .filter((row) => row?.path)
+      .map((row) => ({ path: row.path, content: row.content || "" }));
+    if (!files.length) return { error: "This project has no files yet." };
+
+    try {
+      const result = await postProjectFiles({
+        projectId: data.projectId,
+        projectName: project.name || "",
+        files,
+        publish: false,
+      });
+      return { url: result.url, slug: result.slug, files: result.files };
+    } catch (err) {
+      return { error: err?.message || "The server could not take the files." };
+    }
+  });

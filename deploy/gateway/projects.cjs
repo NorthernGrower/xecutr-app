@@ -258,7 +258,8 @@ function serve(slug, req, res, rest = '') {
 
   res.writeHead(200, {
     'Content-Type': contentType(file),
-    'Cache-Control': 'public, max-age=60',
+    // A preview must show the files as they are now, not a minute ago.
+    'Cache-Control': 'no-cache',
   });
   fs.createReadStream(file).pipe(res);
   return true;
