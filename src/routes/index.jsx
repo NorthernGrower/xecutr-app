@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { FolderGit2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
 import ChatPane from "@/components/workspace/ChatPane";
@@ -7,6 +8,7 @@ import Composer from "@/components/workspace/Composer";
 import FeatureStrip from "@/components/workspace/FeatureStrip";
 import ProjectRail from "@/components/workspace/ProjectRail";
 import { ProjectCard } from "@/components/workspace/ProjectCard";
+import ImportRepoDialog from "@/components/projects/ImportRepoDialog";
 import Panel from "@/components/workspace/Panel";
 import { useAuth } from "@/lib/AuthContext";
 import { carryTrialIntoProject } from "@/lib/carryover";
@@ -35,6 +37,7 @@ function WorkspaceEntry() {
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState("build");
   const [trialMessages, setTrialMessages] = useState([]);
+  const [importOpen, setImportOpen] = useState(false);
   const bootRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -97,6 +100,7 @@ function WorkspaceEntry() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background">
+      {user && <ImportRepoDialog open={importOpen} onOpenChange={setImportOpen} />}
       <WorkspaceHeader providerLabel={user ? undefined : "auto routing"} />
 
       <div className="mx-auto flex w-full max-w-[1400px] flex-1">
@@ -145,6 +149,23 @@ function WorkspaceEntry() {
                   </span>
                 }
               />
+
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  or
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setImportOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-sm border border-white/15 px-3 py-1.5 font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition hover:border-[#b0c4de]/50 hover:text-white"
+                >
+                  <FolderGit2 className="h-3 w-3" strokeWidth={1.8} />
+                  import a repo
+                </button>
+                <span className="font-body text-[11.5px] text-muted-foreground">
+                  paste a GitHub link — a public repo needs nothing else
+                </span>
+              </div>
             </div>
           ) : (
             <div className="mx-auto mt-8 max-w-3xl">
@@ -166,6 +187,14 @@ function WorkspaceEntry() {
                   className="rounded-sm border border-[#e0f7ff]/35 bg-[#e0f7ff]/[0.06] px-4 py-2 font-display text-[11px] font-semibold uppercase tracking-[0.16em] text-[#e0f7ff] transition hover:bg-[#e0f7ff]/[0.14]"
                 >
                   sign up to save it
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigateToLogin()}
+                  className="inline-flex items-center gap-1.5 rounded-sm border border-white/15 px-4 py-2 font-display text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition hover:border-[#b0c4de]/50 hover:text-white"
+                >
+                  <FolderGit2 className="h-3 w-3" strokeWidth={1.8} />
+                  import a repo
                 </button>
                 <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                   the trial carries over

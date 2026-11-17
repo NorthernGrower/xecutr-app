@@ -3,4 +3,4 @@
  * copy can be checked at a glance: open /admin, read "app build", and know
  * whether the deployment has caught up with the repository.
  */
-export const BUILD = "2026-11-17 · context window 15k";
+export const BUILD = "2026-11-17 · import a repo from the landing page";
