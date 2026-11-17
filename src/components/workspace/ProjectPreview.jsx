@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Copy, ExternalLink, Loader2, RotateCw } from "lucide-react";
+import { Copy, Download, ExternalLink, Loader2, RotateCw } from "lucide-react";
 import Panel from "@/components/workspace/Panel";
 import { prepareProjectSite } from "@/lib/site";
+import { downloadZip } from "@/lib/zip";
 
 const NEEDS_BUILD = /\.(jsx|tsx|vue|svelte)$/i;
 
@@ -69,6 +70,14 @@ export default function ProjectPreview({ project, files }) {
 
   const needsBuild = files.some((f) => NEEDS_BUILD.test(f.path));
 
+  // A project without a page of its own has nothing to frame: say why, and what
+  // can be done with it, instead of showing the server's "Not found".
+  const hasPage = files.some((file) => /(^|\/)index\.html?$/i.test(file.path || ""));
+  const looksLikeServer = files.some((file) => /(^|\/)(server|app|index)\.js$/i.test(file.path || ""));
+  const topLevel = [...new Set(files.map((file) => String(file.path || "").split("/")[0]))]
+    .filter(Boolean)
+    .slice(0, 8);
+
   return (
     <Panel className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 border-b border-white/[0.07] px-3 py-2.5">
@@ -119,7 +128,34 @@ export default function ProjectPreview({ project, files }) {
       )}
 
       <div className="min-h-0 flex-1">
-        {error ? (
+        {!hasPage ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+            <p className="font-display text-[12px] font-semibold uppercase tracking-[0.18em] text-white">
+              no page to preview
+            </p>
+            <p className="max-w-md font-body text-[12px] leading-relaxed text-muted-foreground">
+              This project has no <span className="font-mono">index.html</span>.{" "}
+              {looksLikeServer
+                ? "It looks like a server app (Node/Express), which has to be started with `node server.js` — the preview only serves files, it cannot run a server."
+                : "Add a page, or ask the model to make one."}
+            </p>
+            {topLevel.length > 0 && (
+              <p className="max-w-md break-words font-mono text-[10.5px] leading-relaxed text-muted-foreground/80">
+                {topLevel.join(" · ")}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => downloadZip(files, project?.name)}
+              disabled={!files.length}
+              className="inline-flex items-center gap-2 rounded-sm border border-white/15 px-4 py-2 font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition hover:border-[#b0c4de]/50 hover:text-white disabled:opacity-40"
+            >
+              <Download className="h-3 w-3" strokeWidth={1.8} />
+              download the zip
+            </button>
+          </div>
+        ) : error ? (
+
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
             <p className="font-body text-[12px] text-red-300">{error}</p>
             <button

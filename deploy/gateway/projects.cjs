@@ -245,6 +245,35 @@ function serve(slug, req, res, rest = '') {
   // A single-page project: unknown paths fall back to its index.
   if (!fs.existsSync(file) && !path.extname(relative || '')) file = path.join(base, 'index.html');
   if (!fs.existsSync(file)) {
+    const atRoot = !relative || relative === '/';
+    if (atRoot) {
+      // A project with no page of its own: say what is there and why it cannot
+      // run here, rather than a bare "Not found".
+      const names = [];
+      try {
+        for (const entry of fs.readdirSync(base, { withFileTypes: true })) {
+          names.push(entry.isDirectory() ? `${entry.name}/` : entry.name);
+        }
+      } catch {
+        /* nothing to list */
+      }
+      const list = names
+        .slice(0, 20)
+        .map((name) => `<li>${name.replace(/[<>&]/g, '')}</li>`)
+        .join('');
+      res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(
+        '<!doctype html><meta charset="utf-8"><title>No index.html</title>' +
+          '<body style="font:15px/1.6 system-ui;max-width:34rem;margin:12vh auto;padding:0 1.5rem;color:#1e293b">' +
+          '<h1 style="font-size:1.1rem">This project has no index.html</h1>' +
+          '<p>There is no page to serve at the root. If this is a Node or Express app, it needs a ' +
+          'server running (<code>node server.js</code>) — this preview only serves files as they are.</p>' +
+          (list ? `<p>What is here:</p><ul style="font-family:ui-monospace,monospace;font-size:13px">${list}</ul>` : '') +
+          '</body>',
+      );
+      return true;
+    }
+
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Not found');
     return true;

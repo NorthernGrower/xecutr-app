@@ -241,7 +241,11 @@ const systemPrompt = (body, uploadNotes) => {
       '`work/` (for example `work/notes.md`, `work/drafts/home.html`, `work/images/idea.png`) is ' +
       'saved there instead of into the site. Use it for drafts, notes, data you are still working ' +
       'on and anything that should not be published; it is never served and never part of the ' +
-      'site. Everything outside `work/` is the real project.',
+      'site. Everything outside `work/` is the real project. ' +
+      'You cannot run code here and the person is usually on a phone: never ask them to run a ' +
+      'command (`node server.js`, `npm install`) to check your work, and do not treat the project ' +
+      'as running. If the project needs a server, say what it needs and offer something that can ' +
+      'be seen here — an index.html the preview can serve.',
   );
   // The project's whole file list, so the model knows what exists even though
   // only the files this turn is about travel in full.
