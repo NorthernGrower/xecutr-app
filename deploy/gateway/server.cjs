@@ -745,6 +745,37 @@ const proxy = (target) => (req, res) => {
 
 const APEX = (process.env.APP_DOMAIN || 'xecutr.cloud').replace(/^www\./, '');
 
+/**
+ * First path segments the app owns. A published project is served at
+ * `/<slug>`, so its name must never be one of these — the app itself keeps
+ * them, and anything else falls through to the app when no project matches.
+ */
+const RESERVED_PATHS = new Set([
+  'projects',
+  'tasks',
+  'agent',
+  'connections',
+  'help',
+  'profile',
+  'admin',
+  'api',
+  'media',
+  'assets',
+  'login',
+  'register',
+  'mfa',
+  'oauth',
+  'forgot-password',
+  'reset-password',
+  'favicon.ico',
+  'robots.txt',
+  'sitemap.xml',
+  'manifest.json',
+  'link_preview.png',
+  'llms.txt',
+  '.well-known',
+]);
+
 /** `<slug>.xecutr.cloud` -> `<slug>`; the apex and www are the app itself. */
 const projectHost = (host) => {
   const clean = String(host || '').split(':')[0].toLowerCase();
@@ -800,7 +831,8 @@ const projectFiles = async (req, res) => {
         ok: true,
         slug: result.slug,
         files: result.files,
-        url: `https://${result.slug}.${APEX}`,
+        url: `https://${APEX}/${result.slug}`,
+        subdomain: `https://${result.slug}.${APEX}`,
       }),
     );
   } catch (err) {
@@ -821,8 +853,20 @@ const server = http.createServer((req, res) => {
   // A project's own subdomain serves its published files, straight from disk.
   const sub = projectHost(req.headers.host);
   if (sub && !pathname.startsWith('/api/') && !pathname.startsWith('/media/')) {
-    if (!projects.serve(sub, req, res)) projects.listing(res);
+    if (!projects.serve(sub, req, res, pathname)) projects.listing(res);
     return;
+  }
+
+  // The same files are also served at /<slug> on the app's own domain, which
+  // needs no wildcard DNS: any path the app does not own is offered to a
+  // published project with that name first, and falls through to the app.
+  if (!sub && req.method === 'GET') {
+    const segments = pathname.split('/').filter(Boolean);
+    const label = segments[0] || '';
+    if (label && !RESERVED_PATHS.has(label.toLowerCase())) {
+      const rest = `/${segments.slice(1).join('/')}`;
+      if (projects.serve(label, req, res, rest)) return;
+    }
   }
 
   if (pathname === '/api/health' && req.method === 'GET') {

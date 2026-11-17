@@ -169,8 +169,12 @@ function published() {
   }
 }
 
-/** Serve one project's files for a request that arrived on its subdomain. */
-function serve(slug, req, res) {
+/**
+ * Serve one project's files for a request that asked for it — either on its own
+ * subdomain (the whole path belongs to the project) or under the app's own
+ * domain at `/<slug>` (`rest` is then the path inside the project).
+ */
+function serve(slug, req, res, rest = '') {
   const label = slugify(slug, '');
   if (!label) return false;
 
@@ -178,14 +182,13 @@ function serve(slug, req, res) {
   const manifest = path.join(dir, 'project.json');
   if (!fs.existsSync(manifest)) return false;
 
-  let url;
+  let relative;
   try {
-    url = new URL(req.url, 'http://localhost');
+    relative = safeRelative(decodeURIComponent(rest));
   } catch {
-    return false;
+    relative = safeRelative(rest);
   }
 
-  const relative = safeRelative(decodeURIComponent(url.pathname));
   let file = path.join(dir, relative || 'index.html');
   if (relative && fs.existsSync(file) && fs.statSync(file).isDirectory()) {
     file = path.join(file, 'index.html');

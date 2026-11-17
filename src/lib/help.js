@@ -91,13 +91,14 @@ export const HELP = [
   },
   {
     id: "publish",
-    title: "Publishing on a subdomain",
-    intro: "A project can be served by this server on its own address.",
+    title: "Publishing a project",
+    intro: "A project can be served by this server at its own address.",
     steps: [
       "Every finished turn writes the files it produced to /srv/xecutr/projects on the VPS as well as to the project.",
-      "“publish” in a project's toolbar copies the whole project there and returns https://<slug>.xecutr.cloud.",
-      "The server serves index.html at the root, other files by path, and falls back to index.html for unknown paths.",
-      "The wildcard DNS record and the origin certificate for *.xecutr.cloud are a one-time setup — see /scratchpad/subdomains.txt.",
+      "“publish” in a project's toolbar copies the whole project there and returns https://xecutr.cloud/<project>.",
+      "The server serves index.html at that address, other files by path, and falls back to index.html for unknown paths.",
+      "The app's own paths (projects, tasks, help, profile, admin, api…) always stay the app's, even if a project shares the name.",
+      "A subdomain form (project.xecutr.cloud) also works if a wildcard DNS record is ever added — nothing else has to change.",
     ],
   },
   {
