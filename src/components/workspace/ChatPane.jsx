@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Image as ImageIcon, Paperclip, X } from "lucide-react";
+import { AlertTriangle, ArrowUp, Image as ImageIcon, Paperclip, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import AnimatedX from "@/components/brand/AnimatedX";
 import Composer from "@/components/workspace/Composer";
@@ -71,6 +71,7 @@ export default function ChatPane({
   const [mediaOpen, setMediaOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [bannerClosed, setBannerClosed] = useState(false);
+  const [pending, setPending] = useState(pendingPrompt || "");
 
   // Gateway catalogue plus the shipped provider/models list, so every free
   // model (OVH included) is pickable even before the catalogue answers.
@@ -80,7 +81,6 @@ export default function ChatPane({
   const settingsRef = useRef(settings);
   const savedRef = useRef(onSaved);
   const lastPromptRef = useRef("");
-  const sentPending = useRef(false);
   const endRef = useRef(null);
   const modeRef = useRef(initialMode);
 
@@ -351,19 +351,47 @@ export default function ChatPane({
   }, [isLoading]);
 
   useEffect(() => {
-    if (pendingPrompt && !sentPending.current && !isLoading) {
-      sentPending.current = true;
-      lastPromptRef.current = pendingPrompt;
-      send({
-        text: pendingPrompt,
-        providerId: settingsRef.current.providerId,
-        model: settingsRef.current.model,
-        projectId: projectRef.current || null,
-        keys: keysFor(settingsRef.current.providerId),
-        mode,
-      });
+    // The last prompt was sent but no answer was saved: the turn was cut off by
+    // the tab closing, a reload or a pause. It is offered below rather than sent
+    // again on its own — reopening the project must not re-read the prompt.
+    if (pendingPrompt) setPending(pendingPrompt);
+  }, [pendingPrompt]);
+
+  const continuePending = () => {
+    const text = pending;
+    if (!text || isLoading) return;
+    setPending("");
+    lastPromptRef.current = text;
+    send({
+      text,
+      providerId: settingsRef.current.providerId,
+      model: settingsRef.current.model,
+      projectId: projectRef.current || null,
+      keys: keysFor(settingsRef.current.providerId),
+      mode,
+    });
+  };
+
+  /** "Not now" also takes the unanswered message out of the project's history. */
+  const discardPending = async () => {
+    const text = pending;
+    setPending("");
+    if (!projectId || trial) return;
+    try {
+      const rows = await base44.entities.Message.filter(
+        { project_id: projectId },
+        "-created_date",
+        5,
+      );
+      const last = (rows || [])[0];
+      if (last?.role === "user" && String(last.content || "").trim() === text.trim()) {
+        await base44.entities.Message.delete(last.id);
+        savedRef.current?.();
+      }
+    } catch {
+      /* leaving the row is harmless: it will simply be offered again */
     }
-  }, [pendingPrompt, isLoading, send, mode]);
+  };
 
   const upload = async (file) => {
     if (!file) return;
@@ -625,6 +653,37 @@ export default function ChatPane({
       </div>
 
       <div className="shrink-0 pb-1">
+        {!isLoading && pending && (
+          <div className="mb-2 rounded-sm border border-[#b0c4de]/35 bg-[#b0c4de]/[0.06] px-3 py-2">
+            <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#b0c4de]">
+              unfinished turn
+            </p>
+            <p className="mt-1 line-clamp-2 font-body text-[12px] leading-relaxed text-foreground">
+              {pending}
+            </p>
+            <p className="mt-1 font-body text-[11.5px] leading-relaxed text-muted-foreground">
+              The model had not answered this when the tab closed. Carry on from it, or drop it.
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={continuePending}
+                className="inline-flex items-center gap-1.5 rounded-sm border border-[#e0f7ff]/35 bg-[#e0f7ff]/[0.06] px-3 py-1.5 font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-[#e0f7ff] transition hover:bg-[#e0f7ff]/[0.14]"
+              >
+                <ArrowUp className="h-3 w-3" strokeWidth={2} />
+                continue
+              </button>
+              <button
+                type="button"
+                onClick={discardPending}
+                className="rounded-sm border border-white/15 px-3 py-1.5 font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground transition hover:border-[#b0c4de]/50 hover:text-white"
+              >
+                drop it
+              </button>
+            </div>
+          </div>
+        )}
+
         {bannerText && !bannerClosed && (
           <div className="mb-2 flex items-start gap-2 rounded-sm border border-red-500/30 bg-red-500/[0.07] px-3 py-2">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" />

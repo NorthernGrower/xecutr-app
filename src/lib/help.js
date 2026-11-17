@@ -110,6 +110,7 @@ export const HELP = [
       "Every turn is written to the project as it finishes, so closing the browser, switching device or coming back tomorrow carries the thread on.",
       "A request sends the newest turns (about 15,000 tokens), a digest of the older ones, the pinned tasks and the memory notes. The deployment can move that window with the XECUTR_CONTEXT_TOKENS secret.",
       "The digest keeps what was asked and what was decided, not the code — the code lives in the project's files.",
+      "If the tab closes before the model answers, the prompt is kept and shown as an unfinished turn when you come back — carry on from it or drop it; it is not sent again on its own.",
       "This server's own models get a shorter tail of the thread: their context is small and prompt evaluation on a CPU is the slow part.",
       "The project toolbar shows the thread's length next to the file count.",
     ],
