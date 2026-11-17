@@ -127,7 +127,7 @@ export default function ProjectTasks({ projectId }) {
 
       {open && (
         <div className="border-t border-white/10 px-2 py-2">
-          <ul className="max-h-44 space-y-0.5 overflow-auto">
+          <ul className="max-h-[min(11rem,26dvh)] space-y-0.5 overflow-auto">
             {!loading && tasks.length === 0 && (
               <li className="px-2 py-1 font-body text-[11.5px] leading-relaxed text-muted-foreground">
                 Nothing pinned yet. A reply that marks a step adds it here, and you can add one below.
@@ -203,6 +203,12 @@ export default function ProjectTasks({ projectId }) {
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
+              onFocus={(e) => {
+                // With the keyboard up the strip is short: bring the field into
+                // view rather than leaving it under the keys.
+                const field = e.currentTarget;
+                window.setTimeout(() => field.scrollIntoView({ block: "center" }), 250);
+              }}
               placeholder="add a step to keep in view…"
               className="h-7 min-w-0 flex-1 rounded-sm border border-white/10 bg-white px-2 font-body text-[12px] text-foreground outline-none placeholder:text-[#94a3b8] focus:border-[#b0c4de]/50"
             />

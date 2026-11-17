@@ -9,6 +9,7 @@ import PromptHistory from "@/components/workspace/PromptHistory";
 import MediaDialog from "@/components/workspace/MediaDialog";
 import ProjectTasks from "@/components/workspace/ProjectTasks";
 import useXecutrChat from "@/hooks/use-xecutr-chat";
+import useKeyboardInset from "@/hooks/use-keyboard-inset";
 import useMediaJob from "@/hooks/use-media-job";
 import { attachArtifact, xecutrCatalog } from "@/lib/chat";
 import { mergeCatalog, modelLabel } from "@/lib/catalog";
@@ -324,6 +325,19 @@ export default function ChatPane({
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
 
+  // The keyboard shrinks the visual viewport, not the column: pad the bottom by
+  // that much so the prompt and the task input sit above the keys, and keep the
+  // newest message in view while the layout settles.
+  useKeyboardInset();
+
+  useEffect(() => {
+    const vv = typeof window === "undefined" ? null : window.visualViewport;
+    if (!vv) return undefined;
+    const keepInView = () => endRef.current?.scrollIntoView({ block: "end" });
+    vv.addEventListener("resize", keepInView);
+    return () => vv.removeEventListener("resize", keepInView);
+  }, []);
+
   // A visible clock: a local model can take a minute, and a silent spinner looks
   // like a frozen page.
   useEffect(() => {
@@ -559,7 +573,10 @@ export default function ChatPane({
   }, [bannerText]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className="flex h-full min-h-0 flex-col"
+      style={{ paddingBottom: "var(--kb-inset, 0px)" }}
+    >
       <div className="min-h-0 flex-1 space-y-3 overflow-auto overscroll-contain px-1 py-4 sm:px-2">
         {messages.length === 0 && (
           <div className="mx-auto max-w-md py-10 text-center">

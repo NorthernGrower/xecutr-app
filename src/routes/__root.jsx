@@ -20,7 +20,13 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      {
+        name: "viewport",
+        // resizes-content makes Android Chrome shrink the layout viewport for the
+        // keyboard (iOS is handled by --kb-inset in the chat); viewport-fit=cover
+        // lets the safe areas be honoured on a notched phone.
+        content: "width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content",
+      },
       { title: "xecutr — build beyond limits" },
       {
         name: "description",
