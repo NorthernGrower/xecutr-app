@@ -9,9 +9,10 @@ FROM node:14-bullseye-slim
 
 WORKDIR /app
 
-# Dependencies first, so a code change does not reinstall them.
-COPY package.json package-lock.json ./
-RUN npm install --no-audit --no-fund
+# The repository's package-lock.json carries git conflict markers, which npm
+# cannot resolve, so dependencies are installed fresh from package.json.
+COPY package.json ./
+RUN npm install --no-audit --no-fund --package-lock=false
 
 COPY . .
 
