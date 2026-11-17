@@ -75,13 +75,18 @@ function ProjectWorkspace() {
     let alive = true;
 
     (async () => {
-      const [record, messages, projectFiles, all] = await Promise.all([
+      const [record, openMessages, projectFiles, all] = await Promise.all([
         base44.entities.Project.get(projectId).catch(() => null),
-        base44.entities.Message.filter({ project_id: projectId }, "created_date", 200),
+        // Newest first (a limit with an ascending sort returns the *oldest*
+        // turns), then put back in reading order.
+        base44.entities.Message.filter({ project_id: projectId }, "-created_date", 200).then((rows) =>
+          (rows || []).slice().reverse(),
+        ),
         base44.entities.ProjectFile.filter({ project_id: projectId }, "path", 100),
         base44.entities.Project.filter({}, "-updated_date", 40),
       ]);
       if (!alive) return;
+      const messages = openMessages;
 
       setProject(record);
       setFiles(projectFiles);
@@ -278,7 +283,7 @@ function ProjectWorkspace() {
             {titleBlock}
 
             <span className="hidden font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground sm:inline">
-              {files.length} files
+              {files.length} files · {project?.message_count || 0} msgs
             </span>
 
             <div className="ml-auto flex w-full flex-wrap items-center justify-start gap-1 sm:w-auto sm:justify-end">

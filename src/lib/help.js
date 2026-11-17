@@ -90,6 +90,18 @@ export const HELP = [
     ],
   },
   {
+    id: "context",
+    title: "Context and memory",
+    intro: "The conversation lives on the server, and the parts that leave the prompt window are condensed rather than lost.",
+    steps: [
+      "Every turn is written to the project as it finishes, so closing the browser, switching device or coming back tomorrow carries the thread on.",
+      "A request sends the newest turns (about 15,000 tokens), a digest of the older ones, the pinned tasks and the memory notes.",
+      "The digest keeps what was asked and what was decided, not the code — the code lives in the project's files.",
+      "This server's own models get a shorter tail of the thread: their context is small and prompt evaluation on a CPU is the slow part.",
+      "The project toolbar shows the thread's length next to the file count.",
+    ],
+  },
+  {
     id: "tasks",
     title: "The pinned task list",
     intro: "Under the prompt, each project keeps a short list of what must not be forgotten.",

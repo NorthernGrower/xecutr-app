@@ -497,6 +497,32 @@ const chatTurn = async (req, res) => {
     return;
   }
 
+  /**
+   * This server's models run with a small context (4k tokens by default), so a
+   * long thread is not worth sending whole: prompt evaluation is the slowest
+   * part of a CPU turn. They get the tail of the conversation and a trimmed
+   * system prompt; hosted providers still get everything the app sent.
+   */
+  const LOCAL_CONTEXT_CHARS = Number(process.env.OLLAMA_CONTEXT_CHARS) || 12000;
+  const LOCAL_SYSTEM_CHARS = Number(process.env.OLLAMA_SYSTEM_CHARS) || 10000;
+
+  const tailFor = (route) => {
+    if (route.id !== 'ollama') return conversation;
+    const out = [];
+    let used = 0;
+    for (let i = conversation.length - 1; i >= 0; i -= 1) {
+      const message = conversation[i];
+      const size = (message.text || '').length + 8;
+      if (out.length && used + size > LOCAL_CONTEXT_CHARS) break;
+      out.unshift(message);
+      used += size;
+    }
+    return out;
+  };
+
+  const systemFor = (route) =>
+    route.id === 'ollama' ? system.slice(0, LOCAL_SYSTEM_CHARS) : system;
+
   let answer = null;
   let previous = '';
   let reason = 'refusal';
@@ -514,8 +540,8 @@ const chatTurn = async (req, res) => {
     });
 
     answer = await runCandidate(route, {
-      system,
-      messages: conversation,
+      system: systemFor(route),
+      messages: tailFor(route),
       res,
       // Every candidate holds its opening back, so a decline never reaches the
       // reader; this server's models need only a short hold.

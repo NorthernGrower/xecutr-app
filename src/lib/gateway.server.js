@@ -1,5 +1,6 @@
 import { spendTrialTurn } from "@/lib/trial-quota.server";
 import { forwardableKeys } from "@/lib/xecutr.server";
+import { CONTEXT_TOKENS, TRIAL_TOKENS, digestOf, keepWindow } from "@/lib/context.server";
 
 const MAX_MESSAGE_CHARS = 7800; // the model server accepts 8k per message
 const MAX_CONTEXT_FILES = 40;
@@ -65,9 +66,45 @@ export async function buildTurn(data, context) {
     );
   }
 
-  const turns = data.messages?.length ? data.messages : [{ role: "user", content: data.prompt || "" }];
+  const projectId = user && data.projectId ? data.projectId : null;
 
-  const messages = (anonymous ? turns.slice(-10) : turns.slice(-20)).map((m) => ({
+  /**
+   * The conversation comes from the project's saved turns, not from the browser:
+   * closing the tab, switching device or coming back tomorrow must not reset
+   * what the model knows. Signed out there is no project to read from, so the
+   * trial sends the short history it holds itself.
+   */
+  let history = null;
+  if (projectId) {
+    try {
+      // Newest first, then reversed: with an ascending sort and a limit the API
+      // hands back the *oldest* turns, which would leave a long thread without
+      // the recent ones.
+      const rows = await base44.entities.Message.filter({ project_id: projectId }, "-created_date", 400);
+      history = (rows || [])
+        .slice()
+        .reverse()
+        .map((row) => ({
+          role: row.role === "assistant" ? "assistant" : "user",
+          content: String(row.content || ""),
+        }))
+        .filter((m) => m.content.trim());
+    } catch {
+      history = null;
+    }
+  }
+
+  if (!history?.length) {
+    history = data.messages?.length ? data.messages : [{ role: "user", content: data.prompt || "" }];
+  }
+
+  // The newest turns in full; everything older is condensed below, so trimming
+  // never loses the thread.
+  const windowed = keepWindow(history, {
+    tokens: anonymous ? TRIAL_TOKENS : CONTEXT_TOKENS,
+  });
+
+  const messages = windowed.kept.map((m) => ({
     role: m.role,
     text: (m.content || "").slice(0, anonymous ? 4000 : MAX_MESSAGE_CHARS),
   }));
@@ -88,8 +125,6 @@ export async function buildTurn(data, context) {
 
   const uploads = attachments.filter((a) => a.uploadId).map((a) => ({ id: a.uploadId, name: a.name }));
 
-  const projectId = user && data.projectId ? data.projectId : null;
-
   let files = [];
   let memory = [];
   let tasks = [];
@@ -106,6 +141,11 @@ export async function buildTurn(data, context) {
         });
       const notes = await base44.entities.MemoryNote.filter({ project_id: projectId }, "-created_date", 20);
       memory = notes.map((n) => n.note).filter(Boolean);
+
+      // What fell out of the live window, said in a few lines. The stored turns
+      // are untouched — this only carries their intent into the next request.
+      const digest = digestOf(windowed.dropped);
+      if (digest) memory = [digest, ...memory];
 
       // The pinned task list is the memory that survives trimming: it travels
       // with every turn, oldest first so it reads like a plan.
