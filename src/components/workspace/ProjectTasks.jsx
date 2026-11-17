@@ -127,7 +127,12 @@ export default function ProjectTasks({ projectId }) {
 
       {open && (
         <div className="border-t border-white/10 px-2 py-2">
-          <ul className="max-h-[min(11rem,26dvh)] space-y-0.5 overflow-auto">
+          <ul
+            className="space-y-0.5 overflow-auto"
+            // A phone keyboard takes most of the height; the list yields its
+            // room (down to a couple of rows) so the input stays in sight.
+            style={{ maxHeight: "max(2.5rem, calc(min(11rem, 26dvh) - var(--kb-inset, 0px)))" }}
+          >
             {!loading && tasks.length === 0 && (
               <li className="px-2 py-1 font-body text-[11.5px] leading-relaxed text-muted-foreground">
                 Nothing pinned yet. A reply that marks a step adds it here, and you can add one below.
