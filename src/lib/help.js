@@ -90,6 +90,17 @@ export const HELP = [
     ],
   },
   {
+    id: "publish",
+    title: "Publishing on a subdomain",
+    intro: "A project can be served by this server on its own address.",
+    steps: [
+      "Every finished turn writes the files it produced to /srv/xecutr/projects on the VPS as well as to the project.",
+      "“publish” in a project's toolbar copies the whole project there and returns https://<slug>.xecutr.cloud.",
+      "The server serves index.html at the root, other files by path, and falls back to index.html for unknown paths.",
+      "The wildcard DNS record and the origin certificate for *.xecutr.cloud are a one-time setup — see /scratchpad/subdomains.txt.",
+    ],
+  },
+  {
     id: "context",
     title: "Context and memory",
     intro: "The conversation lives on the server, and the parts that leave the prompt window are condensed rather than lost.",

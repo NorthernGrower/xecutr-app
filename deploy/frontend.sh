@@ -226,6 +226,9 @@ env_args=()
 [ -f "${GATEWAY_ENV_FILE}" ] && env_args=(--env-file "${GATEWAY_ENV_FILE}")
 docker run -d --name xecutr --restart unless-stopped --network host \
   "${env_args[@]}" \
+  -v "${PROJECTS_HOST_DIR:-/srv/xecutr/projects}:/projects" \
+  -e PROJECTS_DIR=/projects \
+  -e APP_DOMAIN="${APP_DOMAIN:-xecutr.cloud}" \
   -e PORT=8080 \
   -e FRONTEND_URL="$FRONTEND_URL" \
   -e FRONTEND_ORIGIN="http://127.0.0.1:$FRONT_PORT" \

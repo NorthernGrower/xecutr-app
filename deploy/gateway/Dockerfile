@@ -6,6 +6,7 @@ WORKDIR /gw
 COPY deploy/gateway/server.cjs .
 COPY deploy/gateway/providers.cjs .
 COPY deploy/gateway/telegram.cjs .
+COPY deploy/gateway/projects.cjs .
 
 ENV PORT=8080
 EXPOSE 8080

@@ -8,6 +8,7 @@ import ChatPane from "@/components/workspace/ChatPane";
 import FilePanel from "@/components/workspace/FilePanel";
 import GitHubRepoButton from "@/components/workspace/GitHubRepoButton";
 import DeleteProjectButton from "@/components/projects/DeleteProjectButton";
+import PublishProjectButton from "@/components/projects/PublishProjectButton";
 import ProjectPreview from "@/components/workspace/ProjectPreview";
 import ProjectRail from "@/components/workspace/ProjectRail";
 import { useAuth } from "@/lib/AuthContext";
@@ -202,6 +203,11 @@ function ProjectWorkspace() {
             {files.length} files
           </span>
           <div className="ml-auto flex shrink-0 items-center gap-1">
+            <PublishProjectButton
+              project={project}
+              iconOnly
+              className="inline-flex items-center gap-1.5 rounded-sm border border-white/10 p-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:border-[#e0f7ff]/40 hover:text-[#e0f7ff]"
+            />
             <GitHubRepoButton project={project} onSaved={reload} iconOnly />
             {mobileDeleteButton}
           </div>
@@ -287,6 +293,10 @@ function ProjectWorkspace() {
             </span>
 
             <div className="ml-auto flex w-full flex-wrap items-center justify-start gap-1 sm:w-auto sm:justify-end">
+              <PublishProjectButton
+                project={project}
+                className="inline-flex items-center gap-1.5 rounded-sm border border-[#e0f7ff]/40 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[#e0f7ff] transition hover:bg-[#e0f7ff]/[0.08] disabled:opacity-50"
+              />
               <GitHubRepoButton project={project} onSaved={reload} />
               {deleteButton}
               <button

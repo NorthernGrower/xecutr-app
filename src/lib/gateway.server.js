@@ -144,8 +144,12 @@ export async function buildTurn(data, context) {
   let files = [];
   let memory = [];
   let tasks = [];
+  let projectName = "";
   if (projectId) {
     try {
+      const project = await base44.entities.Project.get(projectId).catch(() => null);
+      projectName = project?.name || "";
+
       const rows = await base44.entities.ProjectFile.filter({ project_id: projectId }, "path", MAX_CONTEXT_FILES);
       let budget = MAX_CONTEXT_CHARS;
       files = rows
@@ -196,6 +200,9 @@ export async function buildTurn(data, context) {
     providerId: data.providerId || "",
     model: await localModel(data),
     turnId: data.turnId || "",
+    // The gateway keeps the project's files on its own disk under this name.
+    projectId: projectId || "",
+    projectName,
     images,
     allowPaid: false,
     memory,

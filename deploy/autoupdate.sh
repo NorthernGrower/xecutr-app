@@ -118,6 +118,9 @@ if printf '%s\n' "${changed}" | grep -q '^deploy/gateway/'; then
     [ -n "$(docker images -q xecutr)" ] && docker run -d --name xecutr \
         --restart unless-stopped --network host \
         "${env_args[@]}" \
+        -v "${PROJECTS_HOST_DIR:-/srv/xecutr/projects}:/projects" \
+        -e PROJECTS_DIR=/projects \
+        -e APP_DOMAIN="${APP_DOMAIN:-xecutr.cloud}" \
         -e PORT=8080 \
         -e FRONTEND_URL="${FRONTEND_URL:-https://xecutr.cloud}" \
         -e FRONTEND_ORIGIN="http://127.0.0.1:8082" \

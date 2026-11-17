@@ -179,6 +179,44 @@ export async function fetchChannels() {
   }
 }
 
+/**
+ * POST /api/project-files — hand the gateway a project's whole file set so it
+ * writes it to its own disk and serves it on the project's subdomain.
+ *
+ * The gateway accepts this only from this machine: the call goes to its loopback
+ * port first, because a request through the public domain carries the proxy's
+ * forwarding headers and is refused.
+ */
+export async function postProjectFiles(body) {
+  const base = apiBase();
+  const loopback = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(base)
+    ? base
+    : "http://127.0.0.1:8080";
+
+  const send = async (url) => {
+    const res = await fetch(`${url}/api/project-files`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify(body),
+    });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok || !payload?.ok) {
+      throw Object.assign(
+        new Error(payload?.error || `The gateway answered ${res.status}.`),
+        { status: 502 },
+      );
+    }
+    return payload;
+  };
+
+  try {
+    return await send(loopback);
+  } catch (err) {
+    if (loopback === base) throw err;
+    return send(base);
+  }
+}
+
 /** GET /api/media/health — which generation models the server has loaded. */
 export async function fetchMediaHealth() {
   try {

@@ -38,6 +38,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const providers = require('./providers.cjs');
 const { createTelegram } = require('./telegram.cjs');
+const projects = require('./projects.cjs');
 
 const PORT = Number(process.env.PORT || '8080');
 const OLLAMA = (process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434/v1').replace(/\/+$/, '');
@@ -597,6 +598,18 @@ const chatTurn = async (req, res) => {
       content: m[2].replace(/\n$/, ''),
     }));
     if (files.length) sse(res, { type: 'files', files });
+
+    // The files belong on this server too: the disk that produced them keeps a
+    // real copy, and a published project can be served from a subdomain.
+    try {
+      projects.mirror({
+        projectId: typeof body.projectId === 'string' ? body.projectId : '',
+        projectName: typeof body.projectName === 'string' ? body.projectName : '',
+        files,
+      });
+    } catch (err) {
+      console.log(`[gateway] project mirror failed: ${err?.message || err}`);
+    }
   }
 
   res.end('data: [DONE]\n\n');
@@ -730,6 +743,72 @@ const proxy = (target) => (req, res) => {
   req.pipe(upstream);
 };
 
+const APEX = (process.env.APP_DOMAIN || 'xecutr.cloud').replace(/^www\./, '');
+
+/** `<slug>.xecutr.cloud` -> `<slug>`; the apex and www are the app itself. */
+const projectHost = (host) => {
+  const clean = String(host || '').split(':')[0].toLowerCase();
+  if (!clean.endsWith(`.${APEX}`) || clean === `www.${APEX}`) return '';
+  const label = clean.slice(0, -(APEX.length + 1));
+  return label && !label.includes('.') ? label : '';
+};
+
+/**
+ * The app pushes a project's whole file set here when the person publishes it.
+ * Only this host may call it: a request that came through Caddy carries
+ * X-Forwarded-For, and a direct one from the app on the same machine does not.
+ */
+const projectFiles = async (req, res) => {
+  const forwarded = req.headers['x-forwarded-for'] || req.headers['x-real-ip'];
+  const token = process.env.XECUTR_PROJECT_TOKEN || '';
+  if (forwarded) {
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'Not from this server.' }));
+    return;
+  }
+  if (token && req.headers['x-xecutr-token'] !== token) {
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'Bad project token.' }));
+    return;
+  }
+
+  let body;
+  try {
+    body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'Bad body.' }));
+    return;
+  }
+
+  if (!body.projectId) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'A project id is required.' }));
+    return;
+  }
+
+  try {
+    const result = projects.mirror({
+      projectId: String(body.projectId),
+      projectName: String(body.projectName || ''),
+      files: Array.isArray(body.files) ? body.files : [],
+      published: Boolean(body.publish),
+    });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        ok: true,
+        slug: result.slug,
+        files: result.files,
+        url: `https://${result.slug}.${APEX}`,
+      }),
+    );
+  } catch (err) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: err?.message || String(err) }));
+  }
+};
+
 const server = http.createServer((req, res) => {
   let pathname = '/';
   try {
@@ -739,9 +818,18 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // A project's own subdomain serves its published files, straight from disk.
+  const sub = projectHost(req.headers.host);
+  if (sub && !pathname.startsWith('/api/') && !pathname.startsWith('/media/')) {
+    if (!projects.serve(sub, req, res)) projects.listing(res);
+    return;
+  }
+
   if (pathname === '/api/health' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, name: 'xecutr', time: new Date().toISOString() }));
+  } else if (pathname === '/api/project-files' && req.method === 'POST') {
+    projectFiles(req, res);
   } else if (pathname === '/api/providers' && (req.method === 'GET' || req.method === 'POST')) {
     providerCatalogue(req, res);
   } else if (pathname === '/api/uploads' && req.method === 'POST') {
