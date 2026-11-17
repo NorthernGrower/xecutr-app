@@ -162,8 +162,13 @@ export async function buildTurn(data, context) {
         }));
 
       fileIndex = all.map((file) => ({ path: file.path, size: file.size })).slice(0, 400);
-      const asked = [...messages].reverse().find((m) => m.role === "user")?.text || "";
-      files = pickFiles(all, asked);
+      // What the person asked for, and what the last answer was working on: a
+      // file the model named there is picked up again without being asked twice.
+      const asked =
+        [...messages].reverse().find((m) => m.role === "user")?.text || "";
+      const workingOn =
+        [...messages].reverse().find((m) => m.role === "assistant")?.text || "";
+      files = pickFiles(all, `${asked}\n${workingOn}`);
       const notes = await base44.entities.MemoryNote.filter({ project_id: projectId }, "-created_date", 20);
       memory = notes.map((n) => n.note).filter(Boolean);
 

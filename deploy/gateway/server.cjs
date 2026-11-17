@@ -252,8 +252,8 @@ const systemPrompt = (body, uploadNotes) => {
       .join('\n');
     parts.push(
       `The project has ${body.fileIndex.length} files. The ones that matter for this turn are ` +
-        `included below in full; if you need another, name its path in one line and it will be ` +
-        `added for the next turn. The rest:\n${names}`,
+        `included below in full; a file you name in a reply is included from the next turn on. ` +
+        `The rest:\n${names}`,
     );
   }
   if (body.files?.length) {
