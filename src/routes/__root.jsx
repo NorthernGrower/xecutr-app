@@ -4,7 +4,8 @@ import { DefaultCatchBoundary } from "@/components/DefaultCatchBoundary";
 import { NotFound } from "@/components/NotFound";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/lib/AuthContext";
-import { watchChunkErrors } from "@/lib/chunk-reload";
+import { watchBuild, watchChunkErrors } from "@/lib/chunk-reload";
+import { BUILD } from "@/lib/build";
 import { Base44Scripts } from "base44:document";
 import appCss from "@/index.css?url";
 
@@ -56,7 +57,16 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   // A script file the page cannot load means this tab is older than the build.
-  useEffect(() => watchChunkErrors(), []);
+  // And a tab brought back after a deploy reloads itself, so it never runs code
+  // the server no longer serves.
+  useEffect(() => {
+    const stopChunkWatch = watchChunkErrors();
+    const stopBuildWatch = watchBuild(BUILD);
+    return () => {
+      stopChunkWatch();
+      stopBuildWatch();
+    };
+  }, []);
 
   return (
     <AuthProvider>
