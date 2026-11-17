@@ -20,15 +20,63 @@ const b64 = (text) => {
 };
 
 /**
- * The caller's own GitHub connection, read on the server with the service role
- * so the token never travels to the browser. Scoped by user_id, which the client
- * cannot set.
+ * The caller's own GitHub connection, read on the server so the token never
+ * travels to the browser.
+ *
+ * Base44's edge attaches a service credential to `asServiceRole`; a copy served
+ * from this app's own host (the VPS behind Caddy) has none, and asking for it
+ * throws "Service token is required to use asServiceRole". So the row is also
+ * read through the member's own client, which the entity's rules allow for the
+ * member who created it.
  */
 const linkFor = async (context) => {
-  const rows = await context
-    .getBase44()
-    .asServiceRole.entities.GitHubLink.filter({ user_id: context.user.id }, "-created_date", 1);
-  return rows[0] || null;
+  const base44 = context.getBase44();
+  try {
+    const rows = await base44.asServiceRole.entities.GitHubLink.filter(
+      { user_id: context.user.id },
+      "-created_date",
+      1,
+    );
+    return rows[0] || null;
+  } catch {
+    try {
+      const rows = await base44.entities.GitHubLink.filter(
+        { user_id: context.user.id },
+        "-created_date",
+        1,
+      );
+      return rows[0] || null;
+    } catch {
+      return null;
+    }
+  }
+};
+
+/** Write the connection with the service credential, or the member's own client. */
+const writeLink = async (context, { id, payload }) => {
+  const base44 = context.getBase44();
+  try {
+    const admin = base44.asServiceRole;
+    if (id) await admin.entities.GitHubLink.update(id, payload);
+    else await admin.entities.GitHubLink.create(payload);
+    return true;
+  } catch {
+    if (id) await base44.entities.GitHubLink.update(id, payload);
+    else await base44.entities.GitHubLink.create(payload);
+    return true;
+  }
+};
+
+/** Forget the caller's stored token. */
+const dropLink = async (context) => {
+  const base44 = context.getBase44();
+  try {
+    await base44.asServiceRole.entities.GitHubLink.deleteMany({ user_id: context.user.id });
+    return true;
+  } catch {
+    await base44.entities.GitHubLink.deleteMany({ user_id: context.user.id });
+    return true;
+  }
 };
 
 /** Whether the caller has a GitHub connection, and whose account it is. No token. */
@@ -48,12 +96,20 @@ export const connectGitHub = createServerFn({ method: "POST" })
     if (!res.ok) return { ok: false, error: `GitHub answered ${res.status}` };
     const gh = await res.json();
 
-    const admin = context.getBase44().asServiceRole;
     const existing = await linkFor(context);
     const payload = { user_id: context.user.id, login: gh.login, token: data.token };
 
-    if (existing) await admin.entities.GitHubLink.update(existing.id, payload);
-    else await admin.entities.GitHubLink.create(payload);
+    try {
+      await writeLink(context, { id: existing?.id, payload });
+    } catch (err) {
+      return {
+        ok: false,
+        error:
+          "This deployment cannot store the connection yet (" +
+          (err?.message || "the server has no service credential") +
+          "). Publish the app from Base44, or import a public repository by link instead.",
+      };
+    }
 
     return { ok: true, login: gh.login, avatar: gh.avatar_url };
   });
@@ -62,9 +118,11 @@ export const connectGitHub = createServerFn({ method: "POST" })
 export const disconnectGitHub = createServerFn({ method: "POST" })
   .middleware([requireUser])
   .handler(async ({ context }) => {
-    await context
-      .getBase44()
-      .asServiceRole.entities.GitHubLink.deleteMany({ user_id: context.user.id });
+    try {
+      await dropLink(context);
+    } catch {
+      /* nothing stored, or no permission to remove it */
+    }
     return { ok: true };
   });
 
