@@ -120,3 +120,66 @@ export function digestOf(dropped = [], { chars = DIGEST_CHARS } = {}) {
 
   return parts.join("\n");
 }
+
+
+/** The files a project normally starts from, worth including unprompted. */
+const ENTRY_FILE =
+  /(^|\/)(index\.html?|package\.json|readme\.md|main\.(jsx?|tsx?|py)|app\.(jsx?|tsx?)|src\/app\.(jsx?|tsx?)|vite\.config\.js|next\.config\.js)$/i;
+
+/**
+ * Which of a project's files travel with this turn.
+ *
+ * Sending every file of an 80-file project wastes the window and, on this
+ * server's own models, takes minutes to read. So the model gets the whole file
+ * *list* (the index) plus the full text of the few that matter now:
+ *
+ *   - files the message names, by path or file name;
+ *   - what changed most recently — the work in progress;
+ *   - the project's entry points (index.html, package.json, app entry, README);
+ *   - then as many more as fit, smallest first.
+ */
+export function pickFiles(all = [], asked = "", { max = 14, chars = 60000 } = {}) {
+  const prompt = String(asked || "").toLowerCase();
+  const picked = new Map();
+  const add = (file) => {
+    if (file?.path && !picked.has(file.path)) picked.set(file.path, file);
+  };
+
+  for (const file of all) {
+    const path = file.path.toLowerCase();
+    const base = path.split("/").pop();
+    if (prompt.includes(path) || (base.length > 3 && prompt.includes(base))) add(file);
+  }
+
+  [...all]
+    .sort((a, b) => String(b.updated || "").localeCompare(String(a.updated || "")))
+    .slice(0, 6)
+    .forEach(add);
+
+  for (const file of all) if (ENTRY_FILE.test(file.path)) add(file);
+
+  const out = [];
+  let used = 0;
+  const consider = (file) => {
+    if (out.length >= max) return;
+    const content = String(file.content || "");
+    if (!content) return;
+    if (used + content.length > chars) return;
+    out.push({ path: file.path, content });
+    used += content.length;
+  };
+
+  for (const file of [...picked.values()].sort((a, b) => (a.size || 0) - (b.size || 0))) {
+    consider(file);
+  }
+
+  // Nothing matched: the smallest few are still better than an empty prompt.
+  if (!out.length) {
+    [...all]
+      .sort((a, b) => (a.size || 0) - (b.size || 0))
+      .slice(0, max)
+      .forEach(consider);
+  }
+
+  return out;
+}

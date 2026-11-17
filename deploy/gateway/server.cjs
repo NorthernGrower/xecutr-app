@@ -243,6 +243,19 @@ const systemPrompt = (body, uploadNotes) => {
       'on and anything that should not be published; it is never served and never part of the ' +
       'site. Everything outside `work/` is the real project.',
   );
+  // The project's whole file list, so the model knows what exists even though
+  // only the files this turn is about travel in full.
+  if (body.fileIndex?.length) {
+    const names = body.fileIndex
+      .slice(0, 300)
+      .map((file) => `${file.path}${file.size ? ` (${file.size}b)` : ''}`)
+      .join('\n');
+    parts.push(
+      `The project has ${body.fileIndex.length} files. The ones that matter for this turn are ` +
+        `included below in full; if you need another, name its path in one line and it will be ` +
+        `added for the next turn. The rest:\n${names}`,
+    );
+  }
   if (body.files?.length) {
     let budget = 120000;
     const blocks = [];
@@ -255,8 +268,8 @@ const systemPrompt = (body, uploadNotes) => {
     }
     if (blocks.length) {
       parts.push(
-        'These are the project files as they stand. Change one by replying with the complete ' +
-          'new version in a block of the same shape:\n' +
+        'The files for this turn, complete. Change one by replying with the complete new ' +
+          'version in a block of the same shape:\n' +
           blocks.join('\n'),
       );
     }

@@ -1,7 +1,7 @@
 import { secrets } from "base44:runtime";
 import { spendTrialTurn } from "@/lib/trial-quota.server";
 import { forwardableKeys } from "@/lib/xecutr.server";
-import { CONTEXT_TOKENS, TRIAL_TOKENS, digestOf, keepWindow } from "@/lib/context";
+import { CONTEXT_TOKENS, TRIAL_TOKENS, digestOf, keepWindow, pickFiles } from "@/lib/context";
 
 /**
  * The window the owner chose: 15,000 tokens per signed-in turn, which fits every
@@ -19,8 +19,6 @@ const contextTokens = () => {
 };
 
 const MAX_MESSAGE_CHARS = 7800; // the model server accepts 8k per message
-const MAX_CONTEXT_FILES = 40;
-const MAX_CONTEXT_CHARS = 300000;
 
 /**
  * The model the caller pinned, passed through untouched. The gateway validates
@@ -142,6 +140,7 @@ export async function buildTurn(data, context) {
   const uploads = attachments.filter((a) => a.uploadId).map((a) => ({ id: a.uploadId, name: a.name }));
 
   let files = [];
+  let fileIndex = [];
   let memory = [];
   let tasks = [];
   let projectName = "";
@@ -150,15 +149,21 @@ export async function buildTurn(data, context) {
       const project = await base44.entities.Project.get(projectId).catch(() => null);
       projectName = project?.name || "";
 
-      const rows = await base44.entities.ProjectFile.filter({ project_id: projectId }, "path", MAX_CONTEXT_FILES);
-      let budget = MAX_CONTEXT_CHARS;
-      files = rows
-        .map((f) => ({ path: f.path, content: f.content || "" }))
-        .filter((f) => {
-          if (f.content.length > budget) return false;
-          budget -= f.content.length;
-          return true;
-        });
+      // The whole file list is cheap; the whole of every file is not. The model
+      // gets the index and the few files this turn is about.
+      const rows = await base44.entities.ProjectFile.filter({ project_id: projectId }, "path", 400);
+      const all = (rows || [])
+        .filter((row) => row?.path)
+        .map((row) => ({
+          path: row.path,
+          content: row.content || "",
+          size: Number(row.size) || (row.content || "").length,
+          updated: row.updated_date || row.created_date || "",
+        }));
+
+      fileIndex = all.map((file) => ({ path: file.path, size: file.size })).slice(0, 400);
+      const asked = [...messages].reverse().find((m) => m.role === "user")?.text || "";
+      files = pickFiles(all, asked);
       const notes = await base44.entities.MemoryNote.filter({ project_id: projectId }, "-created_date", 20);
       memory = notes.map((n) => n.note).filter(Boolean);
 
@@ -177,6 +182,7 @@ export async function buildTurn(data, context) {
         .reverse();
     } catch {
       files = [];
+      fileIndex = [];
       memory = [];
       tasks = [];
     }
@@ -207,6 +213,7 @@ export async function buildTurn(data, context) {
     allowPaid: false,
     memory,
     files,
+    fileIndex,
     tasks,
     rea: uploads.length > 0,
     uploads,
