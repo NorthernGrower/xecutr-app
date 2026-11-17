@@ -62,36 +62,61 @@ export function keepWindow(turns = [], { tokens = CONTEXT_TOKENS } = {}) {
 /**
  * What the trimmed part said, in a few lines: what was asked and what was
  * decided. Code is not repeated here — it lives in the project's files — but the
- * intent and the answer are, so a turn weeks later still knows the thread.
+ * intent and the answer are.
+ *
+ * Both ends of the trimmed stretch are kept: where the work began (the original
+ * brief, the decisions that set the plan) and where it joined the live window.
+ * The gap between them is named rather than filled, so the digest stays small.
  */
 export function digestOf(dropped = [], { chars = DIGEST_CHARS } = {}) {
   if (!dropped.length) return "";
 
-  const lines = [];
-  let used = 0;
-  let skipped = 0;
-
-  for (let index = dropped.length - 1; index >= 0; index -= 1) {
-    const turn = dropped[index];
+  const line = (turn) => {
     const text = squeeze(turn?.content, turn?.role === "user" ? 200 : 300);
+    if (!text) return "";
+    return turn?.role === "user" ? `- they asked: ${text}` : `- it replied: ${text}`;
+  };
+
+  const headBudget = Math.round(chars * 0.4);
+  const tailBudget = chars - headBudget;
+
+  const head = [];
+  let headUsed = 0;
+  let headTurns = 0;
+  for (let index = 0; index < dropped.length; index += 1) {
+    const text = line(dropped[index]);
+    headTurns = index + 1;
     if (!text) continue;
-
-    const line = turn?.role === "user" ? `- they asked: ${text}` : `- it replied: ${text}`;
-    if (used + line.length > chars) {
-      skipped = index + 1;
-      break;
-    }
-    lines.unshift(line);
-    used += line.length + 1;
+    if (headUsed + text.length > headBudget) break;
+    head.push(text);
+    headUsed += text.length + 1;
   }
 
-  if (!lines.length) {
-    return skipped ? `${skipped} earlier turns of this conversation (no text kept).` : "";
+  const tail = [];
+  let tailUsed = 0;
+  let tailTurns = 0;
+  for (let index = dropped.length - 1; index >= headTurns; index -= 1) {
+    const text = line(dropped[index]);
+    if (!text) continue;
+    if (tailUsed + text.length > tailBudget) break;
+    tail.unshift(text);
+    tailUsed += text.length + 1;
+    tailTurns += 1;
   }
 
-  const head = skipped
-    ? `${skipped} older turn${skipped === 1 ? "" : "s"} of this conversation, condensed:`
-    : "Earlier in this conversation, condensed:";
+  const between = dropped.length - headTurns - tailTurns;
+  const parts = [];
+  if (head.length) {
+    parts.push("Where this conversation started:");
+    parts.push(...head);
+  }
+  if (between > 0) {
+    parts.push(`- ${between} turn${between === 1 ? "" : "s"} in between, not repeated here`);
+  }
+  if (tail.length) {
+    parts.push("Just before the current window:");
+    parts.push(...tail);
+  }
 
-  return `${head}\n${lines.join("\n")}`;
+  return parts.join("\n");
 }
