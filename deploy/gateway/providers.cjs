@@ -730,11 +730,14 @@ async function* streamText(route, { messages, system, signal }) {
     // to turn thinking off, and a reasoning model on this box's CPU otherwise
     // spends minutes reasoning before it writes a single word of the answer.
     const root = (provider.apiBaseUrl || '').replace(/\/v1\/?$/, '');
+    const numCtx = Number(process.env.OLLAMA_NUM_CTX) || 16384;
     const body = {
       model: route.model,
       stream: true,
       think: false,
-      options: { num_predict: 4096 },
+      // The default 4k window is smaller than a prompt with a project's files in
+      // it, and Ollama answers that with HTTP 400 rather than trimming.
+      options: { num_predict: 4096, num_ctx: numCtx },
       messages: [
         ...(system ? [{ role: 'system', content: system }] : []),
         ...messages.map((m) => ({

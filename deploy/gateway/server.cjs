@@ -504,13 +504,15 @@ const chatTurn = async (req, res) => {
   }
 
   /**
-   * This server's models run with a small context (4k tokens by default), so a
-   * long thread is not worth sending whole: prompt evaluation is the slowest
-   * part of a CPU turn. They get the tail of the conversation and a trimmed
-   * system prompt; hosted providers still get everything the app sent.
+   * This server's models get a window sized to the context they actually run
+   * with (OLLAMA_NUM_CTX, 16k by default), minus room for the answer. Hosted
+   * providers still get everything the app sent.
    */
-  const LOCAL_CONTEXT_CHARS = Number(process.env.OLLAMA_CONTEXT_CHARS) || 12000;
-  const LOCAL_SYSTEM_CHARS = Number(process.env.OLLAMA_SYSTEM_CHARS) || 10000;
+  const LOCAL_NUM_CTX = Number(process.env.OLLAMA_NUM_CTX) || 16384;
+  const LOCAL_NUM_PREDICT = 4096;
+  const LOCAL_PROMPT_CHARS = Math.max(8000, Math.floor((LOCAL_NUM_CTX - LOCAL_NUM_PREDICT) * 2.5));
+  const LOCAL_SYSTEM_CHARS = Math.floor(LOCAL_PROMPT_CHARS * 0.6);
+  const LOCAL_CONTEXT_CHARS = LOCAL_PROMPT_CHARS - LOCAL_SYSTEM_CHARS;
 
   const tailFor = (route) => {
     if (route.id !== 'ollama') return conversation;
