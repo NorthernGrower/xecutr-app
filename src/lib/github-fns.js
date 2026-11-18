@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { secrets } from "base44:runtime";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth-middleware";
 
@@ -86,6 +87,89 @@ export const githubStatus = createServerFn({ method: "POST" })
     const link = await linkFor(context);
     return { connected: Boolean(link?.token), login: link?.login || "" };
   });
+
+/** Whether the deployment has a GitHub OAuth app, and the page to come back to. */
+export const githubOAuthStart = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(z.object({ redirectUri: z.string().url().max(300) }))
+  .handler(async ({ data }) => {
+    const clientId = secrets.get("GITHUB_CLIENT_ID") || "";
+    if (!clientId) {
+      return {
+        error:
+          "GitHub sign-in is not set up on this deployment yet. Add GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in the app's settings, or use a personal access token below.",
+      };
+    }
+
+    const state = (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
+    const url = new URL("https://github.com/login/oauth/authorize");
+    url.searchParams.set("client_id", clientId);
+    url.searchParams.set("redirect_uri", data.redirectUri);
+    url.searchParams.set("scope", "repo read:user");
+    url.searchParams.set("state", state);
+
+    return { url: url.toString(), state };
+  });
+
+/**
+ * The other half of the sign-in: GitHub sends the person back to the app with a
+ * one-time code, and this exchanges it for a token that is stored on the server
+ * for their account only — the same place a pasted token would go.
+ */
+export const githubOAuthFinish = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(
+    z.object({
+      code: z.string().min(4).max(200),
+      redirectUri: z.string().url().max(300),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const clientId = secrets.get("GITHUB_CLIENT_ID") || "";
+    const clientSecret = secrets.get("GITHUB_CLIENT_SECRET") || "";
+    if (!clientId || !clientSecret) {
+      return { ok: false, error: "GitHub sign-in is not set up on this deployment yet." };
+    }
+
+    const exchange = await fetch("https://github.com/login/oauth/access_token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code: data.code,
+        redirect_uri: data.redirectUri,
+      }),
+    });
+    const body = await exchange.json().catch(() => null);
+    const token = typeof body?.access_token === "string" ? body.access_token : "";
+    if (!token) {
+      return { ok: false, error: body?.error_description || "GitHub did not return a token." };
+    }
+
+    const meRes = await fetch(`${GH}/user`, { headers: headersFor(token) });
+    if (!meRes.ok) return { ok: false, error: `GitHub answered ${meRes.status}.` };
+    const me = await meRes.json();
+
+    const existing = await linkFor(context);
+    try {
+      await writeLink(context, {
+        id: existing?.id,
+        payload: { user_id: context.user.id, login: me.login, token },
+      });
+    } catch (err) {
+      return { ok: false, error: err?.message || "The connection could not be stored." };
+    }
+
+    return { ok: true, login: me.login, avatar: me.avatar_url };
+  });
+
+/** Whether a deployment has the two values the sign-in needs. */
+export const githubOAuthEnabled = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .handler(async () => ({
+    enabled: Boolean(secrets.get("GITHUB_CLIENT_ID") && secrets.get("GITHUB_CLIENT_SECRET")),
+  }));
 
 /** Verify a personal access token, then keep it server-side for this user only. */
 export const connectGitHub = createServerFn({ method: "POST" })

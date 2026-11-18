@@ -16,16 +16,25 @@ export default function GitHubDialog({ open, onOpenChange, project, onSaved }) {
 
   useEffect(() => {
     if (!open) return;
-    setRepo(
-      project?.repo_full_name?.split("/")[1] ||
-        (project?.name || "xecutr-project").toLowerCase().replace(/[^a-z0-9._-]+/g, "-"),
-    );
+    // The repository to save into is one of *yours*: named after the project,
+    // never the one it was imported from (that belongs to someone else).
+    const suggestion = (project?.name || "xecutr-project")
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60);
+    setRepo(suggestion || "xecutr-project");
     setStatus(null);
     if (!user) return;
     githubStatus()
       .then((res) => setAccount(res.connected ? res : null))
       .catch(() => setAccount(null));
   }, [open, project, user?.id]);
+
+  // Is the project's repo already one of this account's own?
+  const mine = Boolean(
+    account?.login && project?.repo_full_name?.startsWith(`${account.login}/`),
+  );
 
   const connect = async () => {
     setBusy(true);
@@ -103,23 +112,39 @@ export default function GitHubDialog({ open, onOpenChange, project, onSaved }) {
               <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#b0c4de]">
                 connected as {account.login}
               </p>
-              {project?.repo_url && (
-                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                  saved to{" "}
+              {mine ? (
+                project?.repo_url && (
+                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                    saved to{" "}
+                    <a
+                      href={project.repo_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#e0f7ff] underline"
+                    >
+                      {project.repo_full_name}
+                    </a>
+                  </p>
+                )
+              ) : project?.repo_full_name ? (
+                <p className="font-body text-[11px] leading-relaxed text-muted-foreground">
+                  Imported from{" "}
                   <a
-                    href={project.repo_url}
+                    href={project.repo_url || `https://github.com/${project.repo_full_name}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-[#e0f7ff] underline"
+                    className="font-mono text-[10px] text-[#e0f7ff] underline"
                   >
                     {project.repo_full_name}
                   </a>
+                  . That repository belongs to someone else, so it is read-only from here — pushing
+                  creates a copy in your own account.
                 </p>
-              )}
+              ) : null}
               <input
                 value={repo}
                 onChange={(e) => setRepo(e.target.value)}
-                placeholder="repo name"
+                placeholder="repo name in your account"
                 className="h-9 w-full rounded-sm border border-white/10 bg-[#0b0b0b] px-2.5 font-mono text-[12px] text-white outline-none focus:border-[#b0c4de]/50"
               />
               <button
@@ -129,7 +154,7 @@ export default function GitHubDialog({ open, onOpenChange, project, onSaved }) {
                 className="inline-flex w-full items-center justify-center gap-2 rounded-sm border border-[#e0f7ff]/35 bg-[#e0f7ff]/[0.06] py-2 font-display text-[11px] font-semibold uppercase tracking-[0.16em] text-[#e0f7ff] transition hover:bg-[#e0f7ff]/[0.14] disabled:opacity-40"
               >
                 {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {project?.repo_full_name ? "update repo" : "push files"}
+                {mine ? "update your repo" : "create in your account"}
               </button>
             </div>
           ) : (

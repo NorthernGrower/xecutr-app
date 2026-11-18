@@ -17,17 +17,18 @@ export default function GitHubRepoButton({ project, onSaved, iconOnly = false })
       .catch(() => setLogin(null));
   }, [user?.id, project?.repo_full_name]);
 
-  const label = project?.repo_full_name ? "update repo" : login ? `@${login}` : "connect github";
+  const mine = Boolean(login && project?.repo_full_name?.startsWith(`${login}/`));
+  const label = mine ? "update repo" : login ? "save to github" : "connect github";
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        title={iconOnly ? label : "Save this project to your own GitHub account"}
+        title={iconOnly ? label : "Save a copy of this project to your own GitHub account"}
         aria-label={label}
         className={`inline-flex shrink-0 items-center gap-1.5 rounded-sm border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] transition ${
-          project?.repo_full_name
+          mine
             ? "border-[#e0f7ff]/40 text-[#e0f7ff] hover:bg-[#e0f7ff]/[0.08]"
             : "border-white/10 text-muted-foreground hover:border-[#b0c4de]/40 hover:text-white"
         }`}

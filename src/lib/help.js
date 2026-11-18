@@ -133,7 +133,10 @@ export const HELP = [
     title: "GitHub",
     intro: "Save a project to your own account, or start one from a repository.",
     steps: [
-      "In a project, “connect github” links your account once; then “update repo” pushes the files.",
+      "In a project, “connect github” links your account once; then “save to github” creates a repo in your own account and later updates it.",
+      "On /connections, “authorize github” signs in through GitHub itself once the deployment has a GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET; a personal access token does the same job without them.",
+      "A project imported from someone else's repository is read-only: saving it creates a copy in your own account.",
+      "“sync repo” brings the repository's current files into the project — for a project the model edits and pushes.",
       "On /projects, “import repo” takes any GitHub link — someone else's public repository needs no account; connect GitHub for your own list and private ones.",
       "The GitHub link is per user, never shared between members.",
     ],
