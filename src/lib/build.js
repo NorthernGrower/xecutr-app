@@ -3,4 +3,4 @@
  * copy can be checked at a glance: open /admin, read "app build", and know
  * whether the deployment has caught up with the repository.
  */
-export const BUILD = "2026-11-17 · rename a project with a save button";
+export const BUILD = "2026-11-17 · save to github: create or update";

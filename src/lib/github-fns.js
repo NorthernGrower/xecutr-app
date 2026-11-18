@@ -576,6 +576,24 @@ export const syncProjectFromRepo = createServerFn({ method: "POST" })
     return { ok: true, added, updated, removed, files: files.length, repo: fullName };
   });
 
+/** Does a repository with this name already exist in the caller's account? */
+export const githubRepoExists = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(z.object({ name: z.string().min(1).max(100) }))
+  .handler(async ({ data, context }) => {
+    const link = await linkFor(context);
+    if (!link?.token) return { connected: false, exists: false, login: "" };
+
+    const meRes = await fetch(`${GH}/user`, { headers: headersFor(link.token) });
+    if (!meRes.ok) return { connected: true, exists: false, login: link.login || "" };
+    const me = await meRes.json();
+
+    const res = await fetch(`${GH}/repos/${me.login}/${data.name}`, {
+      headers: headersFor(link.token),
+    });
+    return { connected: true, login: me.login, exists: res.ok };
+  });
+
 export const pushProjectToGitHub = createServerFn({ method: "POST" })
   .middleware([requireUser])
   .validator(
@@ -616,7 +634,10 @@ export const pushProjectToGitHub = createServerFn({ method: "POST" })
         auto_init: false,
       }),
     });
+    // Already there: that is the update case, not a failure.
+    let created = repoRes.ok;
     if (repoRes.status === 422) {
+      created = false;
       repoRes = await fetch(`${GH}/repos/${me.login}/${data.repoName}`, {
         headers: headersFor(token),
       });
@@ -626,28 +647,70 @@ export const pushProjectToGitHub = createServerFn({ method: "POST" })
     }
 
     const pushed = [];
-    for (const file of files) {
-      const path = file.path.replace(/^\/+/, "");
-      const url = `${GH}/repos/${me.login}/${data.repoName}/contents/${path}`;
-
-      let sha;
-      const existing = await fetch(url, { headers: headersFor(token) });
-      if (existing.ok) {
-        const body = await existing.json();
-        sha = body?.sha;
-      }
-
-      const put = await fetch(url, {
-        method: "PUT",
-        headers: headersFor(token),
-        body: JSON.stringify({
-          message: `xecutr: save ${path}`,
-          content: b64(file.content || ""),
-          ...(sha ? { sha } : {}),
-        }),
-      });
-      if (put.ok) pushed.push(path);
+    let branch = "main";
+    try {
+      const info = await repoRes.json();
+      branch = info?.default_branch || "main";
+    } catch {
+      /* keep main */
     }
+
+    // For an existing repository, one tree call gives every path's blob sha, so
+    // each file needs a single PUT instead of a GET and a PUT.
+    const shaByPath = new Map();
+    if (!created) {
+      try {
+        const treeRes = await fetch(
+          `${GH}/repos/${me.login}/${data.repoName}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+          { headers: headersFor(token) },
+        );
+        if (treeRes.ok) {
+          const tree = await treeRes.json();
+          for (const entry of tree.tree || []) {
+            if (entry.type === "blob" && entry.path) shaByPath.set(entry.path, entry.sha);
+          }
+        }
+      } catch {
+        /* fall back to a lookup per file */
+      }
+    }
+
+    const queue = [...files];
+    const workers = 5;
+    await Promise.all(
+      Array.from({ length: workers }, async () => {
+        for (;;) {
+          const file = queue.shift();
+          if (!file) return;
+          try {
+            const path = file.path.replace(/^\/+/, "");
+            const url = `${GH}/repos/${me.login}/${data.repoName}/contents/${path}`;
+
+            let sha = shaByPath.get(path);
+            if (sha === undefined && !created) {
+              const existing = await fetch(url, { headers: headersFor(token) });
+              if (existing.ok) {
+                const body = await existing.json().catch(() => null);
+                sha = body?.sha;
+              }
+            }
+
+            const put = await fetch(url, {
+              method: "PUT",
+              headers: headersFor(token),
+              body: JSON.stringify({
+                message: `xecutr: save ${path}`,
+                content: b64(file.content || ""),
+                ...(sha ? { sha } : {}),
+              }),
+            });
+            if (put.ok) pushed.push(path);
+          } catch {
+            /* one file failing does not stop the rest */
+          }
+        }
+      }),
+    );
 
     const repo = `${me.login}/${data.repoName}`;
     const url = `https://github.com/${repo}`;
@@ -660,6 +723,7 @@ export const pushProjectToGitHub = createServerFn({ method: "POST" })
       ok: true,
       repo,
       url,
+      created,
       pushed: pushed.length,
       total: files.length,
     };
