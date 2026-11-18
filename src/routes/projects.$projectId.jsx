@@ -13,6 +13,7 @@ import SyncRepoButton from "@/components/projects/SyncRepoButton";
 import ProjectPreview from "@/components/workspace/ProjectPreview";
 import ProjectRail from "@/components/workspace/ProjectRail";
 import { useAuth } from "@/lib/AuthContext";
+import { autoSyncProject, projectRepoHead } from "@/lib/github-fns";
 import { useLayoutMode } from "@/hooks/use-layout-mode";
 
 export const Route = createFileRoute("/projects/$projectId")({
@@ -69,6 +70,7 @@ function ProjectWorkspace() {
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [pane, setPane] = useState("chat");
+  const [repoNote, setRepoNote] = useState("");
 
   const reload = useCallback(() => setRefreshKey((k) => k + 1), []);
 
@@ -105,6 +107,52 @@ function ProjectWorkspace() {
       alive = false;
     };
   }, [user, projectId, refreshKey]);
+
+  /**
+   * Stay in step with the project's repository by itself: when it is opened and
+   * whenever the tab comes back, compare the repository's head with the one the
+   * files came from and pull in anything new. A push to GitHub therefore shows
+   * up here without anyone pressing "sync repo".
+   */
+  useEffect(() => {
+    if (!user || !project?.repo_full_name) return undefined;
+
+    let alive = true;
+    let lastCheck = 0;
+    let hideNote;
+
+    const check = async () => {
+      if (Date.now() - lastCheck < 120000) return;
+      lastCheck = Date.now();
+      try {
+        const head = await projectRepoHead({ data: { projectId } });
+        if (!alive || !head?.linked || !head.changed) return;
+
+        const res = await autoSyncProject({ data: { projectId } });
+        if (!alive || !res?.ok || !res.changed) return;
+
+        setRepoNote(
+          `picked up ${res.files} file${res.files === 1 ? "" : "s"} from ${res.repo} (${res.added} added, ${res.updated} changed, ${res.removed} removed)`,
+        );
+        reload();
+        clearTimeout(hideNote);
+        hideNote = setTimeout(() => setRepoNote(""), 8000);
+      } catch {
+        /* a repository we cannot read right now is not worth a banner */
+      }
+    };
+
+    check();
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
+
+    return () => {
+      alive = false;
+      clearTimeout(hideNote);
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [user, project?.repo_full_name, projectId, reload]);
 
   const title = project?.name || "loading…";
   const headerLabel = useMemo(
@@ -250,6 +298,12 @@ function ProjectWorkspace() {
           </div>
         </div>
 
+        {repoNote && (
+          <p className="border-b border-white/[0.07] bg-[#e0f7ff]/[0.08] px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-[#0e7490]">
+            {repoNote}
+          </p>
+        )}
+
         <div className="min-h-0 flex-1">
           {pane === "chat" && (
             <div className="h-full px-3">
@@ -382,6 +436,12 @@ function ProjectWorkspace() {
               </button>
             </div>
           </div>
+
+          {repoNote && (
+            <p className="border-b border-white/[0.07] bg-[#e0f7ff]/[0.08] px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-[#0e7490] sm:px-4">
+              {repoNote}
+            </p>
+          )}
 
           <div className={`min-h-0 flex-1 px-3 sm:px-4 ${pane === "chat" ? "block" : "hidden"}`}>
             <ChatPane

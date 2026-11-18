@@ -474,17 +474,127 @@ export const importRepoByUrl = createServerFn({ method: "POST" })
  * Bring a project's files back in line with its GitHub repository: new and
  * changed files are written, files the repository no longer has are removed.
  * The repository is the source of truth once a project is linked to one.
+ *
+ * Returns the repository's head commit so the caller can remember it and know
+ * whether anything changed since.
  */
-export const syncProjectFromRepo = createServerFn({ method: "POST" })
+async function applyRepoToProject({ context, projectId }) {
+  const base44 = context.getBase44();
+  const project = await base44.entities.Project.get(projectId).catch(() => null);
+  if (!project) return { ok: false, error: "That project is gone." };
+
+  const fullName = String(project.repo_full_name || "").trim();
+  if (!fullName) return { ok: false, error: "This project has no repository linked yet." };
+
+  const link = await linkFor(context);
+  const token = link?.token || "";
+  const headers = token
+    ? headersFor(token)
+    : { Accept: "application/vnd.github+json", "user-agent": "xecutr", "X-GitHub-Api-Version": "2022-11-28" };
+
+  const metaRes = await fetch(`${GH}/repos/${fullName}`, { headers });
+  if (!metaRes.ok) {
+    return {
+      ok: false,
+      error:
+        metaRes.status === 404
+          ? "That repository is private or does not exist. Connect GitHub to sync a private one."
+          : `GitHub answered ${metaRes.status}.`,
+    };
+  }
+  const meta = await metaRes.json();
+  const branch = meta.default_branch || "main";
+
+  const treeRes = await fetch(
+    `${GH}/repos/${fullName}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+    { headers },
+  );
+  if (!treeRes.ok) return { ok: false, error: `Could not read the ${branch} branch (${treeRes.status}).` };
+  const tree = await treeRes.json();
+
+  const paths = (tree.tree || [])
+    .filter(
+      (entry) =>
+        entry.type === "blob" &&
+        entry.path &&
+        TEXT_FILE.test(entry.path) &&
+        !SKIP_DIR.test(entry.path) &&
+        (entry.size ?? 0) <= MAX_CHARS,
+    )
+    .map((entry) => entry.path)
+    .sort()
+    .slice(0, MAX_FILES);
+
+  if (!paths.length) return { ok: false, error: "That repository has no readable source files." };
+
+  const files = await readFiles({ fullName, branch, paths, token });
+  if (!files.length) return { ok: false, error: "Those files could not be read." };
+
+  const existing = await base44.entities.ProjectFile.filter(
+    { project_id: projectId },
+    "path",
+    500,
+  );
+  const byPath = new Map((existing || []).map((row) => [row.path, row]));
+  let added = 0;
+  let updated = 0;
+  let removed = 0;
+
+  for (const file of files) {
+    const row = byPath.get(file.path);
+    if (row) {
+      if ((row.content || "") !== file.content) {
+        await base44.entities.ProjectFile.update(row.id, {
+          content: file.content,
+          size: file.content.length,
+        });
+        updated += 1;
+      }
+      byPath.delete(file.path);
+      continue;
+    }
+    await base44.entities.ProjectFile.create({
+      project_id: projectId,
+      path: file.path,
+      content: file.content,
+      language: langOf(file.path),
+      size: file.content.length,
+    });
+    added += 1;
+  }
+
+  for (const row of byPath.values()) {
+    await base44.entities.ProjectFile.delete(row.id).catch(() => {});
+    removed += 1;
+  }
+
+  await base44.entities.Project.update(projectId, {
+    file_count: files.length,
+    last_activity: new Date().toISOString(),
+  }).catch(() => {});
+
+  // Which commit these files came from, so the next check knows if it moved.
+  const sha = String(tree.sha || "");
+  if (sha) {
+    await base44.entities.MemoryNote.create({
+      project_id: projectId,
+      note: `repo sha ${fullName} ${sha}`,
+    }).catch(() => {});
+  }
+
+  return { ok: true, added, updated, removed, files: files.length, repo: fullName, sha, branch };
+}
+
+/** The head commit of a project's repository, without touching any files. */
+export const projectRepoHead = createServerFn({ method: "POST" })
   .middleware([requireUser])
   .validator(z.object({ projectId: z.string().min(1).max(64) }))
   .handler(async ({ data, context }) => {
     const base44 = context.getBase44();
     const project = await base44.entities.Project.get(data.projectId).catch(() => null);
-    if (!project) return { ok: false, error: "That project is gone." };
-
+    if (!project) return { linked: false };
     const fullName = String(project.repo_full_name || "").trim();
-    if (!fullName) return { ok: false, error: "This project has no repository linked yet." };
+    if (!fullName) return { linked: false };
 
     const link = await linkFor(context);
     const token = link?.token || "";
@@ -492,89 +602,66 @@ export const syncProjectFromRepo = createServerFn({ method: "POST" })
       ? headersFor(token)
       : { Accept: "application/vnd.github+json", "user-agent": "xecutr", "X-GitHub-Api-Version": "2022-11-28" };
 
-    const metaRes = await fetch(`${GH}/repos/${fullName}`, { headers });
-    if (!metaRes.ok) {
-      return {
-        ok: false,
-        error:
-          metaRes.status === 404
-            ? "That repository is private or does not exist. Connect GitHub to sync a private one."
-            : `GitHub answered ${metaRes.status}.`,
-      };
+    try {
+      const metaRes = await fetch(`${GH}/repos/${fullName}`, { headers });
+      if (!metaRes.ok) return { linked: true, error: `GitHub answered ${metaRes.status}.` };
+      const meta = await metaRes.json();
+      const branch = meta.default_branch || "main";
+      const treeRes = await fetch(
+        `${GH}/repos/${fullName}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+        { headers },
+      );
+      if (!treeRes.ok) return { linked: true, error: `Could not read the ${branch} branch.` };
+      const tree = await treeRes.json();
+
+      const notes = await base44.entities.MemoryNote.filter(
+        { project_id: data.projectId },
+        "-created_date",
+        50,
+      );
+      const marker = (notes || [])
+        .map((note) => String(note.note || ""))
+        .find((text) => text.startsWith(`repo sha ${fullName} `));
+      const known = marker ? marker.slice(`repo sha ${fullName} `.length).trim() : "";
+      const sha = String(tree.sha || "");
+
+      return { linked: true, sha, known, changed: Boolean(sha && sha !== known) };
+    } catch (err) {
+      return { linked: true, error: String(err?.message || err) };
     }
-    const meta = await metaRes.json();
-    const branch = meta.default_branch || "main";
-
-    const treeRes = await fetch(
-      `${GH}/repos/${fullName}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
-      { headers },
-    );
-    if (!treeRes.ok) return { ok: false, error: `Could not read the ${branch} branch (${treeRes.status}).` };
-    const tree = await treeRes.json();
-
-    const paths = (tree.tree || [])
-      .filter(
-        (entry) =>
-          entry.type === "blob" &&
-          entry.path &&
-          TEXT_FILE.test(entry.path) &&
-          !SKIP_DIR.test(entry.path) &&
-          (entry.size ?? 0) <= MAX_CHARS,
-      )
-      .map((entry) => entry.path)
-      .sort()
-      .slice(0, MAX_FILES);
-
-    if (!paths.length) return { ok: false, error: "That repository has no readable source files." };
-
-    const files = await readFiles({ fullName, branch, paths, token });
-    if (!files.length) return { ok: false, error: "Those files could not be read." };
-
-    const existing = await base44.entities.ProjectFile.filter(
-      { project_id: data.projectId },
-      "path",
-      500,
-    );
-    const byPath = new Map((existing || []).map((row) => [row.path, row]));
-    let added = 0;
-    let updated = 0;
-    let removed = 0;
-
-    for (const file of files) {
-      const row = byPath.get(file.path);
-      if (row) {
-        if ((row.content || "") !== file.content) {
-          await base44.entities.ProjectFile.update(row.id, {
-            content: file.content,
-            size: file.content.length,
-          });
-          updated += 1;
-        }
-        byPath.delete(file.path);
-        continue;
-      }
-      await base44.entities.ProjectFile.create({
-        project_id: data.projectId,
-        path: file.path,
-        content: file.content,
-        language: langOf(file.path),
-        size: file.content.length,
-      });
-      added += 1;
-    }
-
-    for (const row of byPath.values()) {
-      await base44.entities.ProjectFile.delete(row.id).catch(() => {});
-      removed += 1;
-    }
-
-    await base44.entities.Project.update(data.projectId, {
-      file_count: files.length,
-      last_activity: new Date().toISOString(),
-    }).catch(() => {});
-
-    return { ok: true, added, updated, removed, files: files.length, repo: fullName };
   });
+
+/**
+ * Keep a project in step with its repository by itself: if the repository has
+ * moved since the last sync, its files are pulled in. Called when a project is
+ * opened and when the tab comes back, so a push shows up without pressing
+ * anything.
+ */
+export const autoSyncProject = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(z.object({ projectId: z.string().min(1).max(64), force: z.boolean().optional() }))
+  .handler(async ({ data, context }) => {
+    const result = await applyRepoToProject({ context, projectId: data.projectId });
+    if (!result.ok) return { ok: false, error: result.error };
+    if (!result.added && !result.updated && !result.removed && !data.force) {
+      return { ok: true, changed: false, repo: result.repo };
+    }
+    return {
+      ok: true,
+      changed: true,
+      repo: result.repo,
+      added: result.added,
+      updated: result.updated,
+      removed: result.removed,
+      files: result.files,
+    };
+  });
+
+/** The button in the project toolbar: sync now, and say what changed. */
+export const syncProjectFromRepo = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(z.object({ projectId: z.string().min(1).max(64) }))
+  .handler(({ data, context }) => applyRepoToProject({ context, projectId: data.projectId }));
 
 /** Does a repository with this name already exist in the caller's account? */
 export const githubRepoExists = createServerFn({ method: "POST" })
@@ -714,6 +801,25 @@ export const pushProjectToGitHub = createServerFn({ method: "POST" })
 
     const repo = `${me.login}/${data.repoName}`;
     const url = `https://github.com/${repo}`;
+
+    // Remember the commit these files came from, so the automatic sync knows
+    // this repository is already up to date with the project.
+    try {
+      const headRes = await fetch(`${GH}/repos/${repo}/git/commits/${encodeURIComponent(branch)}`, {
+        headers: headersFor(token),
+      });
+      const head = await headRes.json().catch(() => null);
+      const sha = head?.tree?.sha;
+      if (sha) {
+        await base44.entities.MemoryNote.create({
+          project_id: data.projectId,
+          note: `repo sha ${repo} ${sha}`,
+        }).catch(() => {});
+      }
+    } catch {
+      /* the next automatic check simply syncs once */
+    }
+
     await base44.entities.Project.update(data.projectId, {
       repo_full_name: repo,
       repo_url: url,
