@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Eye, Files, MessageSquare } from "lucide-react";
+import { Check, Eye, Files, MessageSquare, Pencil, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import WorkspaceHeader from "@/components/workspace/WorkspaceHeader";
 import ChatPane from "@/components/workspace/ChatPane";
@@ -132,36 +132,66 @@ function ProjectWorkspace() {
       onSubmit={async (e) => {
         e.preventDefault();
         const name = nameDraft.trim();
-        if (name) {
+        if (!name) return;
+        try {
           await base44.entities.Project.update(projectId, { name });
           setProject({ ...project, name });
+          setRenaming(false);
+        } catch {
+          /* the input stays open with the typed name */
         }
-        setRenaming(false);
       }}
-      className="flex min-w-0 items-center gap-2"
+      className="flex min-w-0 items-center gap-1.5"
     >
       <input
         autoFocus
         value={nameDraft}
         onChange={(e) => setNameDraft(e.target.value)}
-        className="h-7 min-w-0 flex-1 rounded-sm border border-[#b0c4de]/40 bg-[#0b0b0b] px-2 font-display text-[12px] uppercase tracking-[0.1em] text-white outline-none sm:w-56"
+        className="h-8 min-w-0 flex-1 rounded-sm border border-[#b0c4de]/40 bg-white px-2 font-display text-[12px] uppercase tracking-[0.1em] text-foreground outline-none sm:w-56"
       />
-      <button type="submit" className="shrink-0 text-[#e0f7ff]" aria-label="Save name">
-        <Check className="h-3.5 w-3.5" />
+      <button
+        type="submit"
+        disabled={!nameDraft.trim()}
+        className="inline-flex h-8 shrink-0 items-center gap-1 rounded-sm border border-[#e0f7ff]/40 bg-[#e0f7ff]/[0.08] px-2 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-[#0e7490] transition hover:bg-[#e0f7ff]/[0.16] disabled:opacity-40"
+      >
+        <Check className="h-3 w-3" strokeWidth={2.4} />
+        save
+      </button>
+      <button
+        type="button"
+        onClick={() => setRenaming(false)}
+        aria-label="Cancel renaming"
+        className="inline-flex h-8 shrink-0 items-center rounded-sm border border-white/15 px-2 text-muted-foreground transition hover:text-white"
+      >
+        <X className="h-3 w-3" strokeWidth={2.2} />
       </button>
     </form>
   ) : (
-    <button
-      type="button"
-      onClick={() => {
-        setNameDraft(project?.name || "");
-        setRenaming(true);
-      }}
-      className="min-w-0 truncate text-left font-display text-[12.5px] font-semibold uppercase tracking-[0.14em] text-white hover:text-[#e0f7ff]"
-      title="Tap to rename"
-    >
-      {title}
-    </button>
+    <span className="flex min-w-0 items-center gap-1">
+      <button
+        type="button"
+        onClick={() => {
+          setNameDraft(project?.name || "");
+          setRenaming(true);
+        }}
+        className="min-w-0 truncate text-left font-display text-[12.5px] font-semibold uppercase tracking-[0.14em] text-white hover:text-[#e0f7ff]"
+        title="Rename this project"
+      >
+        {title}
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setNameDraft(project?.name || "");
+          setRenaming(true);
+        }}
+        aria-label="Rename this project"
+        title="Rename this project"
+        className="shrink-0 rounded-sm p-1 text-muted-foreground/70 transition hover:text-[#0e7490]"
+      >
+        <Pencil className="h-3 w-3" strokeWidth={1.8} />
+      </button>
+    </span>
   );
 
   const deleteButton = (
